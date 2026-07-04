@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from typing import Set
+from typing import Any, Set
 import websockets
 from rich.console import Console
 
@@ -15,9 +15,9 @@ class MobileSyncServer:
     def __init__(self, host: str = "localhost", port: int = 8765):
         self.host = host
         self.port = port
-        self.clients: Set[websockets.WebSocketServerProtocol] = set()
+        self.clients: Set[websockets.WebSocketServerProtocol] = set()  # type: ignore[name-defined]
         self.server = None
-        self._latest_state = {}
+        self._latest_state: dict[str, Any] = {}
 
     async def register(self, websocket):
         """Add newly connected client and push the current state."""

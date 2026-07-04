@@ -1,17 +1,15 @@
 """Multi-agent swarm management and spawning"""
 
-from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 from pathlib import Path
-import asyncio
 
-from .runtime import AsyncRuntime
 from ..agents.base import BaseAgent
 from ..agents.planner.architect import SystemArchitect
 from ..agents.frontend.react import ReactSpecialist
 from ..agents.backend.router import RouterAgent
 from ..agents.backend.database import PostgreSQLDBA
 from ..agents.qa.testing import UnitTestingAgent
+from ..agents.planner.secret import DummySecretChecker
 from ..utils.multica_collaboration import MulticaCollaborationEngine
 
 
@@ -21,6 +19,7 @@ AGENT_TYPES = {
     "RouterAgent": RouterAgent,
     "PostgreSQLDBA": PostgreSQLDBA,
     "UnitTestingAgent": UnitTestingAgent,
+    "DummySecretChecker": DummySecretChecker,
 }
 
 
@@ -43,7 +42,7 @@ class SwarmManager:
             if not agent_cls:
                 continue
 
-            agent = agent_cls(
+            agent = agent_cls(  # type: ignore[abstract]
                 workspace=workspace / node["id"],
                 task_id=node["id"],
                 args=node.get("args", {}),
@@ -63,7 +62,7 @@ class SwarmManager:
             return None
 
         kwargs.setdefault("collab_engine", self.collab_engine)
-        agent = agent_cls(workspace=workspace, **kwargs)
+        agent = agent_cls(workspace=workspace, **kwargs)  # type: ignore[abstract]
         self._agents[agent.id] = agent
         return agent
 

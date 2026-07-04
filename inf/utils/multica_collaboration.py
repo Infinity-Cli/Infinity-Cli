@@ -6,7 +6,7 @@ and task handoffs across parallel execution micro-agents.
 
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 @dataclass

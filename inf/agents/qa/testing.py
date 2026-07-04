@@ -1,6 +1,5 @@
 """Unit testing agent"""
 
-import json
 from typing import Dict, Any
 
 from ..base import BaseAgent, AgentResult

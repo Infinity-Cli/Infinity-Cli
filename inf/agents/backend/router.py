@@ -1,6 +1,5 @@
 """Router agent for API backend"""
 
-import json
 from typing import Dict, Any
 
 from ..base import BaseAgent, AgentResult

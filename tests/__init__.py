@@ -1,0 +1,1 @@
+"""Infinity CLI test suite."""

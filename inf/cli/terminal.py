@@ -1,16 +1,11 @@
 """Rich terminal UI components for Infinity CLI"""
 
 from rich.console import Console
-from rich.spinner import Spinner
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
-from rich.live import Live
 from rich.table import Table
 from rich.panel import Panel
 from rich.tree import Tree
-from rich.layout import Layout
 from rich.style import Style
-from typing import Optional
-import time
 
 from ..constants import AgentStatus
 

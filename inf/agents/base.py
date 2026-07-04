@@ -11,7 +11,7 @@ import json
 from rich.console import Console
 
 from ..utils.toon_compressor import ToonCompressor
-from ..utils.skylos_sandbox import SkylosSandbox, SkylosSandboxError
+from ..utils.skylos_sandbox import SkylosSandbox
 from ..utils.multica_collaboration import MulticaCollaborationEngine, MulticaMessage
 
 console = Console()
@@ -31,6 +31,12 @@ class BaseAgent(ABC):
 
     Loop: Think → Plan → Execute → Test → Observe → Repair → Retry → Complete
     """
+
+    agent_id: str = ""
+    name: str = "Agent"
+    role: str = "agent"
+    responsibilities: list[str] = ["execute assigned tasks"]
+    tools: list[str] = ["shell", "write", "read"]
 
     def __init__(
         self,
@@ -76,7 +82,7 @@ class BaseAgent(ABC):
         """Main execution loop with self-healing"""
         # Compress prompt instruction if needed via Toon
         plan = await self.think()
-        plan_compact = ToonCompressor.compress_prompt(json.dumps(plan))
+        ToonCompressor.compress_prompt(json.dumps(plan))
 
         while self.retries < self.max_retries:
             # Check for any collaboration messages/handoffs

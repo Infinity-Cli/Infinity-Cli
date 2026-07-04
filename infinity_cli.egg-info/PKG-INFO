@@ -12,23 +12,53 @@ Classifier: Programming Language :: Python :: 3.11
 Requires-Python: >=3.11
 Description-Content-Type: text/markdown
 License-File: LICENSE
-Requires-Dist: typer>=0.12.0
-Requires-Dist: rich>=13.0.0
-Requires-Dist: pydantic>=2.0.0
-Requires-Dist: aiosqlite>=0.20.0
-Requires-Dist: websockets>=12.0
-Requires-Dist: python-dotenv>=1.0.0
-Requires-Dist: questionary>=2.0.0
-Requires-Dist: aiofiles>=23.0.0
-Requires-Dist: networkx>=3.0
-Requires-Dist: anyio>=4.0.0
-Requires-Dist: httpx>=0.25.0
+Requires-Dist: typer>=0.12
+Requires-Dist: rich>=13
+Requires-Dist: pydantic>=2
+Requires-Dist: pydantic-settings>=2
+Requires-Dist: aiosqlite>=0.20
+Requires-Dist: websockets>=12
+Requires-Dist: python-dotenv>=1
+Requires-Dist: questionary>=2
+Requires-Dist: aiofiles>=23
+Requires-Dist: networkx>=3
+Requires-Dist: anyio>=4
+Requires-Dist: httpx>=0.25
 Provides-Extra: dev
-Requires-Dist: pytest>=7.0.0; extra == "dev"
-Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
-Requires-Dist: black>=23.0.0; extra == "dev"
-Requires-Dist: ruff>=0.1.0; extra == "dev"
-Requires-Dist: mypy>=1.0.0; extra == "dev"
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: pytest-asyncio; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+Requires-Dist: mypy; extra == "dev"
 Dynamic: license-file
 
 # Infinity-Cli
+
+Infinity-Cli is a terminal-native autonomous AI operating system. It orchestrates
+agent swarms through a lightweight DAG runtime, persists state in SQLite, and
+integrates directly with cloud LLM providers.
+
+## Installation
+
+```bash
+git clone <repo-url> /path/to/Infinity-Cli
+cd /path/to/Infinity-Cli
+python -m pip install -e .
+```
+
+## Quick start
+
+```bash
+infinity --help
+infinity config          # configure your API key
+infinity ask "hello"     # conversational mode (dry-run ready)
+infinity run "goal"      # autonomous swarm execution (dry-run ready)
+infinity status          # runtime status
+```
+
+## Development
+
+```bash
+python -m pip install -e ".[dev]"
+pytest tests/ -v
+```

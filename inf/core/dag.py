@@ -1,9 +1,8 @@
 """DAG scheduler and dependency resolver"""
 
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import List
 import networkx as nx
-import json
 
 
 class TaskNode(BaseModel):
@@ -36,7 +35,6 @@ class DAG(BaseModel):
 
     def get_ready_tasks(self, completed: set) -> List[TaskNode]:
         """Get tasks ready to execute (all dependencies met)"""
-        graph = self.to_networkx()
         ready = []
         for node in self.nodes:
             if node.id not in completed:

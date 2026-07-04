@@ -1,120 +1,148 @@
-"""Main orchestration engine - coordinates all execution phases"""
+"""DAG orchestrator for agent task execution."""
 
-from dataclasses import dataclass, field
-from typing import Optional, Any
 import asyncio
-import uuid
+import logging
 from pathlib import Path
+from typing import Optional, Sequence
 
-from rich.console import Console
+import networkx as nx
 
-from ..constants import AgentStatus
-from .dag import DAGScheduler
-from .swarm import SwarmManager
-from .runtime import AsyncRuntime
-from ..memory.sqlite import MemoryDB
-from ..secrets.manager import SecretManager
-from ..cli.terminal import TerminalUI
+from inf.agents.registry import AGENT_REGISTRY, create_agent
+from inf.models.router import ModelRouter
+from inf.persistence.db import Database
+from inf.persistence.models import RuntimeStatus, Task
+from inf.persistence.repositories import TaskRepository
+from inf.runtime.helpers import run_single_agent_loop
+from inf.sync.api_client import SyncClient
 
-console = Console()
-ui = TerminalUI()
-
-
-@dataclass
-class ExecutionContext:
-    """Context for a single execution run"""
-    goal: str
-    execution_id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    workspace: Path = field(default_factory=lambda: Path("workspace") / str(uuid.uuid4()))
-    status: str = "initializing"
-    agents: dict = field(default_factory=dict)
+logger = logging.getLogger(__name__)
 
 
 class Orchestrator:
-    """Main orchestration engine coordinating all phases"""
+    """Build and topologically sort a simple task DAG."""
 
-    def __init__(
+    def __init__(self) -> None:
+        self.graph: nx.DiGraph = nx.DiGraph()
+
+    def build_dag(self, tasks: Sequence[str]) -> nx.DiGraph:
+        """Build a linear DAG from an ordered list of task names."""
+        self.graph.clear()
+        for i, task in enumerate(tasks):
+            self.graph.add_node(task, index=i)
+            if i > 0:
+                self.graph.add_edge(tasks[i - 1], task)
+        return self.graph
+
+    def execution_order(self) -> list[str]:
+        """Return a topological ordering of the current DAG."""
+        if not self.graph:
+            return []
+        return list(nx.topological_sort(self.graph))
+
+    async def execute(self, goal: str) -> list[str]:
+        """Stub async executor that logs planned steps."""
+        order = self.execution_order()
+        logger.info("Executing goal: %s", goal)
+        for step in order:
+            logger.info("Step: %s", step)
+        return order
+
+    async def execute_goal(
         self,
         goal: str,
+        *,
+        db: Database,
+        model_router: ModelRouter | None,
+        workspace_root: Path,
         max_agents: int = 10,
         timeout: int = 3600,
-    ):
-        self.goal = goal
-        self.context = ExecutionContext(goal=goal)
-        self.max_agents = max_agents
-        self.timeout = timeout
+        enable_sync: bool = False,
+        sync_base_url: Optional[str] = None,
+        **loop_kwargs,
+    ) -> dict:
+        """Execute a swarm of registered agents for ``goal``.
 
-        self.memory = MemoryDB()
-        self.secrets = SecretManager()
-        self.runtime = AsyncRuntime(max_concurrent=max_agents)
-        self.dag = DAGScheduler()
-        self.swarm = SwarmManager()
+        One task is generated per agent in :data:`inf.agents.registry.AGENT_REGISTRY`,
+        executed in topologically-sorted order and limited to ``max_agents``
+        concurrent runs.  Each agent is persisted through ``run_single_agent_loop``.
 
-    async def execute_async(self):
-        """Execute the full orchestration pipeline asynchronously"""
-        try:
-            ui.banner()
+        Returns a summary dict with ``success``, ``completed``, ``failed`` and
+        ``goal`` keys, and persists the summary as a task record.
+        """
+        if db.connection is None:
+            await db.initialize()
 
-            # Phase 1: Architecture Planning
-            console.print("[cyan]Phase 1:[/cyan] Architecture Planning...")
-            dag_dict = await self._analyze_goal()
-            dag = self.dag.parse(dag_dict)
-            self.context.workspace.mkdir(parents=True, exist_ok=True)
+        run_id = loop_kwargs.pop("run_id", None) or f"orchestrator-{goal}"
+        sync_client: Optional[SyncClient] = None
+        if enable_sync:
+            sync_client = SyncClient(
+                sync_base_url or "http://localhost:8000",
+                run_id,
+            )
+        agent_ids = list(AGENT_REGISTRY.keys())
+        self.build_dag(agent_ids)
+        order = self.execution_order()
 
-            # Phase 2: Secret Scanning
-            console.print("[cyan]Phase 2:[/cyan] Secret Detection...")
-            required_secrets = self.dag.extract_secrets(dag)
-            await self.secrets.validate_or_prompt(required_secrets)
+        semaphore = asyncio.Semaphore(max_agents)
+        results: dict[str, bool] = {}
 
-            # Phase 3: Swarm Spawn
-            console.print("[cyan]Phase 3:[/cyan] Swarm Spawn...")
-            agents = await self.swarm.spawn_agents(dag_dict, self.context.workspace)
-            self.context.agents = {a.id: a for a in agents}
+        async def _run_agent(agent_id: str) -> None:
+            async with semaphore:
+                workspace = workspace_root / agent_id
+                workspace.mkdir(parents=True, exist_ok=True)
+                agent = create_agent(
+                    agent_id,
+                    workspace=workspace,
+                    task_id=f"{goal}::{agent_id}",
+                )
+                result = await run_single_agent_loop(
+                    agent,
+                    db=db,
+                    run_id=run_id,
+                    task_id=f"{goal}::{agent_id}",
+                    model_router=model_router,
+                    enable_persistence=True,
+                    enable_sync=enable_sync,
+                    sync_base_url=sync_base_url,
+                    sync_client=sync_client,
+                    **loop_kwargs,
+                )
+                results[agent_id] = result.success
 
-            # Phase 4: Parallel Execution
-            console.print("[cyan]Phase 4:[/cyan] Parallel Autonomous Execution...")
-            await self.runtime.execute_swarm(agents, dag_dict)
+        pending = [asyncio.create_task(_run_agent(aid)) for aid in order]
+        done, still_pending = await asyncio.wait(pending, timeout=timeout)
 
-            # Phase 5: Integration
-            console.print("[cyan]Phase 5:[/cyan] Integration...")
-            await self._integrate()
+        # Cancel anything that did not finish in time.
+        if still_pending:
+            for task in still_pending:
+                task.cancel()
+            await asyncio.gather(*still_pending, return_exceptions=True)
 
-            # Phase 6: Finalization
-            console.print("[cyan]Phase 6:[/cyan] Finalization...")
-            await self._finalize()
+        for aid in order:
+            if aid not in results:
+                results[aid] = False
 
-            console.print("[bold green]Execution Complete[/bold green]")
+        completed = [aid for aid in order if results.get(aid)]
+        failed = [aid for aid in order if not results.get(aid)]
 
-        except Exception as e:
-            console.print(f"[red]Error: {e}[/red]")
-            raise
-
-    def execute(self):
-        """Synchronous entry point"""
-        asyncio.run(self.execute_async())
-
-    async def _analyze_goal(self) -> dict:
-        """Analyze goal and generate DAG via LLM"""
-        # Placeholder - will call LLM to generate DAG
-        dag = {
-            "nodes": [
-                {"id": "frontend", "type": "ReactSpecialist", "depends_on": []},
-                {"id": "backend", "type": "RouterAgent", "depends_on": ["frontend"]},
-                {"id": "database", "type": "PostgreSQLDBA", "depends_on": ["backend"]},
-                {"id": "tests", "type": "UnitTestingAgent", "depends_on": ["database"]},
-            ],
-            "edges": [
-                {"from": "frontend", "to": "backend"},
-                {"from": "backend", "to": "database"},
-                {"from": "database", "to": "tests"},
-            ],
+        summary = {
+            "success": all(results.values()) and not still_pending,
+            "completed": completed,
+            "failed": failed,
+            "goal": goal,
         }
-        return dag
 
-    async def _integrate(self):
-        """Integration phase - merge services and validate"""
-        pass
+        await TaskRepository.create(
+            db,
+            Task(
+                task_id="orchestrator-summary",
+                run_id=run_id,
+                agent_id="orchestrator",
+                status=RuntimeStatus.COMPLETED if summary["success"] else RuntimeStatus.FAILED,
+                input={"goal": goal},
+                output=summary,
+                retry_count=0,
+            ),
+        )
 
-    async def _finalize(self):
-        """Finalization phase - archive and cleanup"""
-        pass
+        return summary

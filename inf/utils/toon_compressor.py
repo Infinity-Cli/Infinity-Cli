@@ -5,7 +5,7 @@ collapses verbose JSON schema structures, and minimizes long execution logs or h
 """
 
 import json
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List
 
 
 class ToonCompressor:

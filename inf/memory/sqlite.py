@@ -1,7 +1,7 @@
 """SQLite-based persistence for agent states and execution logs"""
 
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 from datetime import datetime
 import aiosqlite
 import json

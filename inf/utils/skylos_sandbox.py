@@ -7,7 +7,7 @@ controls workspace filesystem containment, and prevents dangerous runtime patter
 import re
 import shlex
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Tuple
 
 
 class SkylosSandboxError(Exception):

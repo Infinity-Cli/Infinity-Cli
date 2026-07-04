@@ -1,5 +1,7 @@
 """Run command - autonomous Infinity mode"""
 
+import asyncio
+
 import typer
 from rich.console import Console
 from rich.prompt import Confirm
@@ -33,5 +35,6 @@ def run_command(
             console.print("[yellow]Cancelled.[/yellow]")
             raise typer.Exit()
 
-    orchestrator = Orchestrator(goal, max_agents=max_agents, timeout=timeout)
-    orchestrator.execute()
+    orchestrator = Orchestrator()
+    order = asyncio.run(orchestrator.execute(goal))
+    console.print(f"[dim]Planned execution order:[/dim] {order}")
