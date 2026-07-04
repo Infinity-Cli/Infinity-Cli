@@ -333,7 +333,7 @@ class NvidiaProvider(OpenAICompatibleProvider):
 
     name = "nvidia"
     requires_api_key = True
-    default_model = "meta/llama-3.1-405b-instruct"
+    default_model = "meta/llama-3.1-8b-instruct"
 
     def __init__(self, api_key: str, client: Optional[httpx.AsyncClient] = None) -> None:
         super().__init__(api_key=api_key, base_url="https://integrate.api.nvidia.com/v1", client=client)

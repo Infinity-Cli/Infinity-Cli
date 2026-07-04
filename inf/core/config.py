@@ -45,7 +45,7 @@ class Settings(BaseSettings):
                 self.default_provider = first
                 if "/" in self.default_model and not self.default_model.startswith(f"{first}/"):
                     self.default_model = {
-                        "nvidia": "nvidia/meta/llama-3.1-405b-instruct",
+                        "nvidia": "nvidia/meta/llama-3.1-8b-instruct",
                     }.get(first, self.default_model.split("/", 1)[1])
 
 
