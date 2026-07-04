@@ -88,6 +88,12 @@ class ApiKeyManager:
         """Return True if at least one Infinity API key is configured."""
         return bool(self.load_keys())
 
+    def clear_keys(self) -> None:
+        """Remove all Infinity API keys from ``.env``."""
+        self._ensure_env_file()
+        for provider in ("openai", "anthropic", "google", "nvidia", "openai_compatible"):
+            set_key(self.env_file, f"{self.KEY_PREFIX}{provider.upper()}", "")
+
     def _ensure_env_file(self) -> None:
         """Create the ``.env`` file if it does not exist."""
         if not self.env_file.exists():

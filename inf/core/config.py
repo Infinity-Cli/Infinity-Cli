@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -50,4 +51,6 @@ class Settings(BaseSettings):
 
 def load_settings() -> Settings:
     """Load and return application settings."""
+    if not os.getenv("PYTEST_CURRENT_TEST"):
+        load_dotenv(".env")
     return Settings()

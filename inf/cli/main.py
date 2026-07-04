@@ -265,6 +265,7 @@ def loop(
 @app.command("config")
 def config(
     dry_run: bool = typer.Option(False, "--dry-run", help="Preview configuration steps without writing"),
+    reset: bool = typer.Option(False, "--reset", help="Clear existing API keys and re-prompt"),
 ) -> None:
     """Configure API keys and runtime settings.
 
@@ -279,6 +280,9 @@ def config(
         ))
         return
     manager = ApiKeyManager()
+    if reset:
+        manager.clear_keys()
+        console.print("[yellow]Existing API keys cleared.[/yellow]")
     if manager.has_any_key():
         console.print("[green]At least one API key is already configured.[/green]")
         return
