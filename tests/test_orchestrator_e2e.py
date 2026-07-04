@@ -43,7 +43,7 @@ def test_run_executes_all_agents_with_mocked_ollama(mock_ollama, tmp_path, monke
     )
 
     assert result.exit_code == 0, result.output
-    assert "Run complete" in result.output
+    assert "Swarm Run: Success" in result.output
 
     db_path = tmp_path / "infinity.db"
     db = Database(f"sqlite+aiosqlite:///{db_path}")

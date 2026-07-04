@@ -64,6 +64,7 @@ class RoundTable:
         personas: list[Persona] | None = None,
         rounds: int = 2,
         console: Console | None = None,
+        verbose: bool = False,
     ) -> None:
         self.topic = topic
         self.provider = provider
@@ -72,6 +73,7 @@ class RoundTable:
         self.rounds = max(1, rounds)
         self.bus = MessageBus()
         self.console = console or Console()
+        self.verbose = verbose
 
     async def run(self) -> str:
         """Execute the roundtable and return a Markdown string."""
@@ -83,10 +85,11 @@ class RoundTable:
                 response = await self.provider.chat(messages)
                 await self.bus.publish("discussion", persona.id, response)
                 history.append({"role": "assistant", "content": f"{persona.name}: {response}"})
-                self.console.print(
-                    f"[dim][round {round_num}] {persona.name} spoke[/dim]",
-                    highlight=False,
-                )
+                if self.verbose:
+                    self.console.print(
+                        f"[dim][round {round_num}] {persona.name} spoke[/dim]",
+                        highlight=False,
+                    )
 
         final_messages = [
             {"role": "system", "content": MODERATOR_SYSTEM},
@@ -124,6 +127,7 @@ async def run_discussion(
     settings: Settings,
     rounds: int = 2,
     console: Console | None = None,
+    verbose: bool = False,
 ) -> str:
     """Convenience entry point for the roundtable."""
     table = RoundTable(
@@ -132,5 +136,6 @@ async def run_discussion(
         settings=settings,
         rounds=rounds,
         console=console,
+        verbose=verbose,
     )
     return await table.run()

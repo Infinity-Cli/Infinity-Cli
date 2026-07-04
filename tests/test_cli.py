@@ -48,7 +48,7 @@ def test_run_without_dry_run_shows_live(monkeypatch):
     monkeypatch.setenv("INFINITY_API_KEY_OPENAI", "sk-test-key")
     result = runner.invoke(app, ["run", "deploy", "--no-confirm"])
     assert result.exit_code == 0
-    assert "Run complete" in result.output
+    assert "Swarm Run: Success" in result.output
 
 
 def test_status_watch_flag():

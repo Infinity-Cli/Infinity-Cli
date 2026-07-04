@@ -1,6 +1,7 @@
 """Infinity CLI Typer application."""
 
 import asyncio
+import enum
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
@@ -35,13 +36,21 @@ def _provider_label(model: str) -> str:
     return ""
 
 
+class OutputFormat(str, enum.Enum):
+    """Supported CLI output formats."""
+
+    MARKDOWN = "markdown"
+    RAW = "raw"
+
+
 @app.command("ask")
 def ask(
     prompt: str = typer.Argument(..., help="Question or instruction for the assistant"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print the call without invoking a provider"),
     model: Optional[str] = typer.Option(None, "--model", help="Model to use"),
+    format: OutputFormat = typer.Option(OutputFormat.MARKDOWN, "--format", "-f", help="Output format"),
 ) -> None:
-    """Conversational AI assistant mode."""
+    """Conversational AI assistant mode. Prints the answer as Markdown by default."""
     settings = load_settings()
     resolved_model = model or settings.default_model
     provider_label = _provider_label(resolved_model) or settings.default_provider
@@ -51,7 +60,8 @@ def ask(
             f"[bold cyan]Dry-run ask[/bold cyan]\n\n"
             f"Prompt: {prompt}\n"
             f"Model: {resolved_model}\n"
-            f"Provider: {provider_label}\n\n"
+            f"Provider: {provider_label}\n"
+            f"Format: {format.value}\n\n"
             "No provider was called.",
             border_style="cyan",
         ))
@@ -82,11 +92,11 @@ def ask(
         ))
         raise typer.Exit(1)
 
-    console.print(Panel.fit(
-        f"[bold cyan]{resolved_model}[/bold cyan]\n\n{response}",
-        title="Infinity",
-        border_style="cyan",
-    ))
+    if format == OutputFormat.RAW:
+        print(response)
+    else:
+        from rich.markdown import Markdown
+        console.print(Markdown(response.strip()))
 
 
 SWARM_STEPS = [
@@ -107,8 +117,9 @@ def run(
     timeout: int = typer.Option(3600, "--timeout", help="Execution timeout in seconds"),
     enable_sync: bool = typer.Option(False, "--enable-sync", help="Push status/logs to Infinity-api and poll for commands"),
     sync_base_url: Optional[str] = typer.Option(None, "--sync-base-url", help="Infinity-api base URL (defaults to INFINITY_SYNC_BASE_URL or http://localhost:8000)"),
+    output: OutputFormat = typer.Option(OutputFormat.MARKDOWN, "--output", "-o", help="Final report format"),
 ) -> None:
-    """Autonomous swarm execution mode."""
+    """Autonomous swarm execution mode. Prints a Markdown report by default."""
     settings = load_settings()
     provider_id, api_key = resolve_provider(settings)
 
@@ -167,25 +178,50 @@ def run(
     finally:
         asyncio.run(db.close())
 
-    if summary["success"]:
-        console.print(Panel.fit(
-            f"[bold green]Run complete[/bold green]\n\n"
-            f"Goal: {goal}\n"
-            f"Provider: {provider_id}\n"
-            f"Completed {len(summary['completed'])} agents"
-            f"{(' (none failed)' if not summary['failed'] else '')}.",
-            border_style="green",
-        ))
+    report = _build_run_report(goal, provider_id, summary, output)
+    if output == OutputFormat.RAW:
+        print(report)
     else:
-        console.print(Panel.fit(
-            f"[bold red]Run failed[/bold red]\n\n"
-            f"Goal: {goal}\n"
-            f"Provider: {provider_id}\n"
-            f"Completed: {len(summary['completed'])}\n"
-            f"Failed: {', '.join(summary['failed']) or 'none'}.",
-            border_style="red",
-        ))
+        from rich.markdown import Markdown
+        console.print(Markdown(report.strip()))
+
+    if not summary["success"]:
         raise typer.Exit(1)
+
+
+def _build_run_report(goal: str, provider_id: str, summary: dict, output: OutputFormat) -> str:
+    """Return a Markdown or plain-text summary of a swarm run."""
+    status = "success" if summary["success"] else "failed"
+    completed = summary.get("completed", [])
+    failed = summary.get("failed", [])
+    if output == OutputFormat.RAW:
+        lines = [
+            f"Status: {status}",
+            f"Goal: {goal}",
+            f"Provider: {provider_id}",
+            f"Completed agents ({len(completed)}): {', '.join(completed) or 'none'}",
+            f"Failed agents ({len(failed)}): {', '.join(failed) or 'none'}",
+        ]
+        return "\n".join(lines)
+    lines = [
+        f"# Swarm Run: {status.title()}",
+        "",
+        f"**Goal:** {goal}",
+        f"**Provider:** {provider_id}",
+        "",
+        f"## Completed agents ({len(completed)})",
+    ]
+    if completed:
+        lines.extend(f"- `{agent}`" for agent in completed)
+    else:
+        lines.append("_none_")
+    lines.append("")
+    lines.append(f"## Failed agents ({len(failed)})")
+    if failed:
+        lines.extend(f"- `{agent}`" for agent in failed)
+    else:
+        lines.append("_none_")
+    return "\n".join(lines)
 
 
 async def _tiny_sleep() -> None:
@@ -246,21 +282,23 @@ def loop(
         asyncio.run(db.close())
 
     if result.success:
-        console.print(Panel.fit(
-            f"[bold green]Loop complete[/bold green]\n\n"
-            f"Agent: {agent}\n"
-            f"Iterations: {result.iterations}\n"
-            f"Retries: {result.retries}",
-            border_style="green",
-        ))
+        report = (
+            f"# Loop Complete\n\n"
+            f"- **Agent:** {agent}\n"
+            f"- **Iterations:** {result.iterations}\n"
+            f"- **Retries:** {result.retries}\n"
+        )
     else:
-        console.print(Panel.fit(
-            f"[bold red]Loop failed[/bold red]\n\n"
-            f"Error: {result.error}\n"
-            f"Iterations: {result.iterations}\n"
-            f"Retries: {result.retries}",
-            border_style="red",
-        ))
+        report = (
+            f"# Loop Failed\n\n"
+            f"- **Agent:** {agent}\n"
+            f"- **Error:** {result.error}\n"
+            f"- **Iterations:** {result.iterations}\n"
+            f"- **Retries:** {result.retries}\n"
+        )
+    from rich.markdown import Markdown
+    console.print(Markdown(report.strip()))
+    if not result.success:
         raise typer.Exit(1)
 
 
@@ -269,11 +307,12 @@ def discuss(
     topic: str = typer.Argument(..., help="Topic or question for the agents to discuss"),
     rounds: int = typer.Option(2, "--rounds", "-r", help="Number of discussion rounds"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Print the setup without calling the provider"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show each agent turn"),
 ) -> None:
     """Multi-agent roundtable: agents discuss a topic and return Markdown.
 
-    The internal conversation is shown as short status lines; the final
-    synthesized answer is printed as Markdown.
+    The internal conversation is hidden by default; use --verbose to see each
+    agent turn. The final synthesized answer is printed as Markdown.
     """
     settings = load_settings()
     if dry_run:
@@ -299,7 +338,7 @@ def discuss(
     provider = get_provider(provider_id, api_key=api_key)
 
     try:
-        answer = asyncio.run(run_discussion(topic, provider, settings, rounds=rounds, console=console))
+        answer = asyncio.run(run_discussion(topic, provider, settings, rounds=rounds, console=console, verbose=verbose))
     except Exception as exc:
         console.print(Panel.fit(
             f"[bold red]Discussion failed[/bold red]\n\n{exc}",

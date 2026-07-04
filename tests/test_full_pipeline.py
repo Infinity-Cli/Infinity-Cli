@@ -131,7 +131,7 @@ def test_run_pushes_status_and_claims_remote_pause_command(
 
     # The run should complete without an unhandled exception.
     assert result.exit_code == 0, result.output
-    assert "Run complete" in result.output
+    assert "Swarm Run: Success" in result.output
 
     # The runtime was registered with Infinity-api.
     assert len(mock_sync_api.statuses) >= 1
