@@ -63,6 +63,43 @@ def test_config_help():
     assert "API key" in result.output or "provider" in result.output.lower()
 
 
+def test_app_has_discuss_command():
+    result = runner.invoke(app, ["discuss", "best python patterns", "--dry-run"])
+    assert result.exit_code == 0
+    assert "Dry-run discuss" in result.output
+    assert "planner" in result.output
+    assert "coder" in result.output
+    assert "reviewer" in result.output
+
+
+def test_discuss_without_api_key_warns():
+    result = runner.invoke(app, ["discuss", "best python patterns"])
+    assert result.exit_code == 1
+    assert "No API key configured" in result.output
+
+
+def test_discuss_with_fake_provider(monkeypatch):
+    monkeypatch.setenv("INFINITY_API_KEY_OPENAI", "sk-test-key")
+
+    class FakeProvider:
+        name = "openai"
+        call_count = 0
+
+        async def chat(self, messages, model=None, **kwargs):
+            FakeProvider.call_count += 1
+            if any("You are a moderator" in m.get("content", "") for m in messages if m.get("role") == "system"):
+                return "# Final Answer\n\nThis is the final markdown answer."
+            return "I suggest using a list comprehension."
+
+    monkeypatch.setattr("inf.cli.main.get_provider", lambda provider_id, **kwargs: FakeProvider())
+
+    result = runner.invoke(app, ["discuss", "reverse a string in python"])
+    assert result.exit_code == 0
+    assert "Final Answer" in result.output
+    assert "This is the final markdown answer." in result.output
+    assert FakeProvider.call_count > 1
+
+
 class FakeResponse:
     def __init__(self, status_code: int, json_data: dict | None = None, text: str = ""):
         self.status_code = status_code

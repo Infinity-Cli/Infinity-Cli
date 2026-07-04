@@ -18,6 +18,8 @@ from inf.persistence.db import Database
 from inf.providers.factory import get_provider, resolve_provider
 from inf.runtime.helpers import run_single_agent_loop
 
+from .discuss import PERSONAS, run_discussion
+
 app = typer.Typer(
     name="infinity",
     help="Infinity - Terminal-native autonomous AI operating system",
@@ -260,6 +262,53 @@ def loop(
             border_style="red",
         ))
         raise typer.Exit(1)
+
+
+@app.command("discuss")
+def discuss(
+    topic: str = typer.Argument(..., help="Topic or question for the agents to discuss"),
+    rounds: int = typer.Option(2, "--rounds", "-r", help="Number of discussion rounds"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Print the setup without calling the provider"),
+) -> None:
+    """Multi-agent roundtable: agents discuss a topic and return Markdown.
+
+    The internal conversation is shown as short status lines; the final
+    synthesized answer is printed as Markdown.
+    """
+    settings = load_settings()
+    if dry_run:
+        console.print(Panel.fit(
+            f"[bold cyan]Dry-run discuss[/bold cyan]\n\n"
+            f"Topic: {topic}\n"
+            f"Rounds: {rounds}\n"
+            f"Agents: {', '.join(p.id for p in PERSONAS)}\n\n"
+            "No provider was called.",
+            border_style="cyan",
+        ))
+        return
+
+    if not settings.api_keys:
+        console.print(Panel.fit(
+            "[bold yellow]No API key configured[/bold yellow]\n\n"
+            "Run [bold]infinity config[/bold] to add an API key.",
+            border_style="yellow",
+        ))
+        raise typer.Exit(1)
+
+    provider_id, api_key = resolve_provider(settings)
+    provider = get_provider(provider_id, api_key=api_key)
+
+    try:
+        answer = asyncio.run(run_discussion(topic, provider, settings, rounds=rounds, console=console))
+    except Exception as exc:
+        console.print(Panel.fit(
+            f"[bold red]Discussion failed[/bold red]\n\n{exc}",
+            border_style="red",
+        ))
+        raise typer.Exit(1)
+
+    from rich.markdown import Markdown
+    console.print(Markdown(answer.strip()))
 
 
 @app.command("config")
