@@ -77,7 +77,7 @@ class ApiKeyManager:
         """Load all Infinity API keys from ``.env``."""
         load_dotenv(self.env_file)
         keys: dict[str, str] = {}
-        for provider in ("openai", "anthropic", "google", "openai_compatible"):
+        for provider in ("openai", "anthropic", "google", "nvidia", "openai_compatible"):
             env_var = f"{self.KEY_PREFIX}{provider.upper()}"
             value = os.getenv(env_var)
             if value:

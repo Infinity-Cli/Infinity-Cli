@@ -16,6 +16,8 @@ def detect_provider(api_key: str) -> str | None:
         return "anthropic"
     if key.startswith("AIza"):
         return "google"
+    if key.startswith("nvapi-"):
+        return "nvidia"
     if key.startswith("sk-") and len(key) > 40:
         return "openai"
 

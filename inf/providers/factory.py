@@ -26,6 +26,8 @@ def get_provider(
         if not base_url:
             raise ValueError("openai_compatible provider requires base_url")
         return provider_cls(api_key=api_key, base_url=base_url)  # type: ignore[call-arg]
+    if provider_id == "nvidia":
+        return provider_cls(api_key=api_key)  # type: ignore[call-arg]
     return provider_cls(api_key=api_key)  # type: ignore[call-arg]
 
 

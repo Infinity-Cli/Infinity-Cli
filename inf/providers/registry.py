@@ -328,9 +328,21 @@ class OpenAICompatibleProvider(Provider):
             return await _request(c)
 
 
+class NvidiaProvider(OpenAICompatibleProvider):
+    """NVIDIA API-compatible provider using the OpenAI-compatible endpoint."""
+
+    name = "nvidia"
+    requires_api_key = True
+    default_model = "meta/llama-3.1-405b-instruct"
+
+    def __init__(self, api_key: str, client: Optional[httpx.AsyncClient] = None) -> None:
+        super().__init__(api_key=api_key, base_url="https://integrate.api.nvidia.com/v1", client=client)
+
+
 PROVIDER_REGISTRY: dict[str, type[Provider]] = {
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "google": GoogleProvider,
+    "nvidia": NvidiaProvider,
     "openai_compatible": OpenAICompatibleProvider,
 }

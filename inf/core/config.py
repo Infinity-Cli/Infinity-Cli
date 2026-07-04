@@ -30,13 +30,22 @@ class Settings(BaseSettings):
     def model_post_init(self, __context: object) -> None:
         """Load INFINITY_API_KEY_* variables from the environment."""
         keys: dict[str, str] = {}
-        for provider in ("openai", "anthropic", "google", "openai_compatible"):
+        for provider in ("openai", "anthropic", "google", "nvidia", "openai_compatible"):
             env_var = f"INFINITY_API_KEY_{provider.upper()}"
             value = os.getenv(env_var)
             if value:
                 keys[provider] = value
         if keys:
             self.api_keys = keys
+            # If the default provider has no configured key, pick the first one
+            # and update the default model so simple commands work out of the box.
+            if self.default_provider not in keys:
+                first = next(iter(keys))
+                self.default_provider = first
+                if "/" in self.default_model and not self.default_model.startswith(f"{first}/"):
+                    self.default_model = {
+                        "nvidia": "nvidia/meta/llama-3.1-405b-instruct",
+                    }.get(first, self.default_model.split("/", 1)[1])
 
 
 def load_settings() -> Settings:
