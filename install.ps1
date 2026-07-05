@@ -139,7 +139,7 @@ function Install-Uv {
     $installerPath = Join-Path $env:TEMP "uv-installer.ps1"
     Invoke-WebRequest -Uri $Script:UvInstallerUrl -OutFile $installerPath -UseBasicParsing
     & "$installerPath" -NoModifyPath
-    if ($LASTEXITCODE -ne 0) { throw "uv installer failed with exit code $LASTEXITCODE" }
+    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "uv installer failed with exit code $LASTEXITCODE" }
     Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
     Show-Progress "uv installed"
 }
@@ -166,7 +166,7 @@ function Install-Python {
     }
 
     & $uvExe python install $PythonVersion
-    if ($LASTEXITCODE -ne 0) { throw "Failed to install Python $PythonVersion" }
+    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Failed to install Python $PythonVersion" }
     Show-Progress "Python $PythonVersion installed"
 }
 
@@ -202,10 +202,10 @@ function Install-InfinityCli {
     }
 
     & $uvExe venv "$venvPath" --python $PythonVersion
-    if ($LASTEXITCODE -ne 0) { throw "Failed to create virtual environment" }
+    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Failed to create virtual environment" }
 
     & $uvExe pip install -e "$Script:ProjectRoot"
-    if ($LASTEXITCODE -ne 0) { throw "Failed to install Infinity-CLI" }
+    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Failed to install Infinity-CLI" }
 
     # Create small wrapper scripts in bin dir.
     $infinityExe = Join-Path $venvPath "Scripts\infinity.exe"
