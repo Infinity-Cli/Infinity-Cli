@@ -39,11 +39,14 @@ After installation, run `infinity` to auto-start the daemon and enter interactiv
 See the full commit log:
 
 ```
+2c4848d fix(ci): normalize line endings, executable install.sh, detached daemon spawn, remove flaky daemon-lifecycle job
+e3f7b1a docs(release): include pnpm workspace fix in v0.1.0 changelog
 3834e86 fix(pnpm): add packages list to cli-ts workspace config
 5630b3e fix(ci): use job-level defaults.run.shell for matrix shell selection
+7551666 fix(release): point install URLs and changelog to Infinity-Cli/Infinity-Cli v0.1.0
 bcb982e Add 'update' CLI command and release notes
 9bc8231 release: v0.1.0 premium onboarding redesign + cli-ts
-53f699d feat: markdown-first CLI output, hidden agent chatter, --format/--output/--verbose
+53f699d feat: markdown-first CLI output, hidden agent chatter, --format/--output/--verbose options
 c3b08f7 feat: add infinity discuss multi-agent roundtable command; fix .env loading
 e1d323b fix: use available NVIDIA default model and provider default mapping
 7fcf464 fix: load .env before settings, add config --reset, support nvidia detection
