@@ -18,6 +18,7 @@ from inf.models.router import ModelRouter
 from inf.persistence.db import Database
 from inf.providers.factory import get_provider, resolve_provider
 from inf.runtime.helpers import run_single_agent_loop
+from inf.server.server import start_server
 
 from .discuss import PERSONAS, run_discussion
 
@@ -375,6 +376,16 @@ def config(
         console.print("[green]At least one API key is already configured.[/green]")
         return
     manager.prompt_and_store()
+
+
+@app.command("server")
+def server(
+    host: str = typer.Option("127.0.0.1", "--host", help="Host address to bind to"),
+    port: int = typer.Option(8000, "--port", help="Port number to listen on"),
+) -> None:
+    """Start the Infinity CLI local server."""
+    console.print(f"[bold blue]Starting Infinity server on {host}:{port}[/bold blue]")
+    start_server(host=host, port=port)
 
 
 def main() -> None:

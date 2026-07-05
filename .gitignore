@@ -17,3 +17,5 @@ workspace/
 *.db-shm
 .infinity/
 .kimchi/
+cli-ts/node_modules/
+cli-ts/dist/

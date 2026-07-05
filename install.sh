@@ -1,0 +1,351 @@
+#!/usr/bin/env bash
+# ---------------------------------------------------------------------------
+# Infinity-CLI — cross-platform installer for Linux and macOS
+# ---------------------------------------------------------------------------
+# One-line installer that bootstraps uv, installs a managed Python,
+# creates a virtual environment, installs Infinity-CLI in editable
+# mode, and updates the user PATH.
+#
+# Usage:
+#   bash install.sh                    # full install
+#   bash install.sh --dry-run          # preview only
+#   bash install.sh --python-version 3.12  # specify Python version
+#
+# Environment:
+#   INFINITY_CLI_HOME — optional override for install root
+# ---------------------------------------------------------------------------
+set -euo pipefail
+
+# ---- CLI args ------------------------------------------------------------
+DRY_RUN=false
+PYTHON_VERSION="3.12"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --dry-run) DRY_RUN=true; shift ;;
+        --python-version)
+            if [[ $# -lt 2 ]]; then
+                echo "ERROR: --python-version requires a value (e.g. --python-version 3.12)"
+                exit 1
+            fi
+            PYTHON_VERSION="$2"
+            shift 2
+            ;;
+        --python-version=*)
+            PYTHON_VERSION="${1#*=}"
+            shift
+            ;;
+        *) echo "WARNING: unknown argument '$1', ignoring"; shift ;;
+    esac
+done
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$SCRIPT_DIR"
+
+# ---------------------------------------------------------------------------
+# OS detection
+# ---------------------------------------------------------------------------
+detect_os() {
+    local os arch
+    case "$(uname -s)" in
+        Linux*)  os="linux" ;;
+        Darwin*) os="macos" ;;
+        *)       os="unknown" ;;
+    esac
+
+    case "$(uname -m)" in
+        x86_64|amd64) arch="x86_64" ;;
+        aarch64|arm64) arch="aarch64" ;;
+        *) arch="$(uname -m)" ;;
+    esac
+
+    echo "$os $arch"
+}
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+read -r OS ARCH <<< "$(detect_os)"
+
+INSTALL_ROOT="${INFINITY_CLI_HOME:-}"
+if [[ -z "$INSTALL_ROOT" ]]; then
+    INSTALL_ROOT="$HOME/.local/share/infinity-cli"
+fi
+
+BIN_DIR="$HOME/.local/bin"
+VENV_DIR="$INSTALL_ROOT/venv"
+
+# ---------------------------------------------------------------------------
+# Progress / logging helpers
+# ---------------------------------------------------------------------------
+_timestamp() { date '+%H:%M:%S'; }
+
+log() {
+    local msg="$1"
+    echo "[$(_timestamp)] $msg" >&2
+}
+
+log_info()  { log "INFO:  $1"; }
+log_warn()  { log "WARN:  $1"; }
+log_ok()    { log "OK:    $1"; }
+log_error() { log "ERROR: $1"; }
+
+dry_run_note() {
+    if $DRY_RUN; then
+        echo "  [DRY-RUN] $1" >&2
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# step wrapper
+# ---------------------------------------------------------------------------
+step() {
+    local label="$1"
+    shift
+    log_info "Starting: $label"
+    if $DRY_RUN; then
+        dry_run_note "Would execute: $*"
+        return 0
+    fi
+    "$@"
+    log_ok "Completed: $label"
+}
+
+# ---------------------------------------------------------------------------
+# Main install function
+# ---------------------------------------------------------------------------
+bootstrap_uv() {
+    log_info "Bootstrapping uv"
+
+    if $DRY_RUN; then
+        dry_run_note "Would download uv installer from: https://github.com/astral-sh/uv/releases/latest/download/uv-installer.sh"
+        dry_run_note "Would run installer targeting install root: $INSTALL_ROOT"
+        return 0
+    fi
+
+    if command -v uv &>/dev/null; then
+        log_info "uv already found on PATH"
+        return 0
+    fi
+
+    local installer_url="https://github.com/astral-sh/uv/releases/latest/download/uv-installer.sh"
+    local tmpdir
+    tmpdir="$(mktemp -d)"
+
+    # Use curl or wget
+    if command -v curl &>/dev/null; then
+        curl -fsSL "$installer_url" -o "$tmpdir/uv-installer.sh"
+    elif command -v wget &>/dev/null; then
+        wget -q "$installer_url" -O "$tmpdir/uv-installer.sh"
+    else
+        log_error "neither curl nor wget found. Please install one of them."
+        exit 1
+    fi
+
+    # Make executable and run
+    chmod +x "$tmpdir/uv-installer.sh"
+    UV_INSTALL_DIR="$INSTALL_ROOT" bash "$tmpdir/uv-installer.sh"
+    rm -rf "$tmpdir"
+
+    log_ok "uv installed"
+}
+
+install_python() {
+    log_info "Installing managed Python $PYTHON_VERSION via uv"
+
+    if $DRY_RUN; then
+        dry_run_note "Would run: uv python install $PYTHON_VERSION"
+        return 0
+    fi
+
+    # Ensure uv is on PATH
+    export PATH="$INSTALL_ROOT/bin:$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
+    if ! command -v uv &>/dev/null; then
+        if [[ -x "$INSTALL_ROOT/bin/uv" ]]; then
+            export PATH="$INSTALL_ROOT/bin:$PATH"
+        else
+            log_error "uv not found. Install uv first."
+            exit 1
+        fi
+    fi
+
+    uv python install "$PYTHON_VERSION"
+    log_ok "Python $PYTHON_VERSION installed"
+}
+
+install_infinity_cli() {
+    log_info "Creating virtual environment and installing Infinity-CLI"
+
+    local uv_exe
+    uv_exe="$(command -v uv || echo "$INSTALL_ROOT/bin/uv")"
+
+    if $DRY_RUN; then
+        dry_run_note "Would create venv at: $VENV_DIR"
+        dry_run_note "Would run: $uv_exe venv '$VENV_DIR' --python $PYTHON_VERSION"
+        dry_run_note "Would install: $uv_exe pip install -e '$PROJECT_ROOT'"
+        dry_run_note "Would create wrapper script at: $BIN_DIR/infinity"
+        return 0
+    fi
+
+    # Create install root and bin dir
+    mkdir -p "$INSTALL_ROOT"
+    mkdir -p "$BIN_DIR"
+    mkdir -p "$(dirname "$VENV_DIR")"
+
+    # Create venv
+    log_info "Creating virtual environment at $VENV_DIR"
+    "$uv_exe" venv "$VENV_DIR" --python "$PYTHON_VERSION"
+
+    # Activate venv
+    local venv_bin="$VENV_DIR/bin"
+    if [[ ! -f "$venv_bin/python" && ! -f "$venv_bin/python3" ]]; then
+        log_error "venv python not found at $venv_bin"
+        exit 1
+    fi
+
+    # Install package in editable mode — use the venv's python
+    local venv_python="$venv_bin/python"
+    if [[ ! -x "$venv_python" ]]; then
+        venv_python="$venv_bin/python3"
+    fi
+    log_info "Installing Infinity-CLI in editable mode"
+    "$uv_exe" pip install -e "$PROJECT_ROOT" --python "$venv_python"
+
+    # Create wrapper script
+    log_info "Creating wrapper script at $BIN_DIR/infinity"
+    local infinity_path="$BIN_DIR/infinity"
+    cat > "$infinity_path" << WRAPPER_EOF
+#!/usr/bin/env bash
+set -euo pipefail
+INSTALL_ROOT="$INSTALL_ROOT"
+VENV_DIR="$INSTALL_ROOT/venv"
+exec "$VENV_DIR/bin/infinity" "$@"
+WRAPPER_EOF
+    chmod +x "$infinity_path"
+
+    log_ok "Infinity-CLI installed"
+}
+
+update_path() {
+    log_info "Updating PATH"
+
+    local profile_file
+    local shell_name="${SHELL##*/}"
+
+    case "$shell_name" in
+        bash) profile_file="$HOME/.bash_profile" ;;
+        zsh)  profile_file="$HOME/.zshrc" ;;
+        *)    profile_file="$HOME/.profile" ;;
+    esac
+
+    # Also check for .profile fallback
+    if [[ ! -f "$profile_file" ]]; then
+        profile_file="$HOME/.profile"
+    fi
+
+    local path_line="export PATH=\"\$PATH:$BIN_DIR\""
+
+    if $DRY_RUN; then
+        dry_run_note "Would add to $profile_file:"
+        echo "    $path_line" >&2
+        return 0
+    fi
+
+    # Check if already present
+    if grep -qF "$BIN_DIR" "$profile_file" 2>/dev/null; then
+        log_info "PATH entry already present in $profile_file"
+        return 0
+    fi
+
+    echo "" >> "$profile_file"
+    echo "# Added by Infinity-CLI installer" >> "$profile_file"
+    echo "$path_line" >> "$profile_file"
+    log_ok "Added $BIN_DIR to PATH in $profile_file"
+}
+
+check_node() {
+    log_info "Checking Node.js availability"
+
+    if $DRY_RUN; then
+        dry_run_note "Would check for node >= 18"
+    fi
+
+    if command -v node &>/dev/null; then
+        local version
+        version="$(node --version 2>/dev/null || true)"
+        if [[ -n "$version" ]]; then
+            local major
+            major="$(echo "$version" | sed 's/v//' | cut -d. -f1)"
+            if [[ "$major" -ge 18 ]]; then
+                log_ok "Node.js $version available"
+            else
+                log_warn "Node.js $version found, but >= 18 required"
+            fi
+        else
+            log_warn "Could not determine Node.js version"
+        fi
+    else
+        log_warn "Node.js not found on PATH. Infinity-CLI requires Node.js >= 18."
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
+main() {
+    echo "==========================================" >&2
+    echo "  Infinity-CLI Installer" >&2
+    echo "==========================================" >&2
+    if $DRY_RUN; then
+        echo "  DRY-RUN MODE — no changes will be made" >&2
+    fi
+    echo "" >&2
+
+    log_info "Detected OS: $OS, Architecture: $ARCH"
+    log_info "Install root: $INSTALL_ROOT"
+    log_info "Bin dir: $BIN_DIR"
+    log_info "Python version: $PYTHON_VERSION"
+    echo "" >&2
+
+    # Bail on unknown OS — the installer is designed for Linux/macOS
+    if [[ "$OS" == "unknown" ]]; then
+        log_error "Unsupported OS: $(uname -s)"
+        exit 1
+    fi
+
+    # Step 1: bootstrap uv
+    bootstrap_uv
+
+    # Step 2: install managed Python
+    install_python
+
+    # Step 3: install Infinity-CLI
+    install_infinity_cli
+
+    # Step 4: update PATH
+    update_path
+
+    # Step 5: Node.js check
+    check_node
+
+    echo "" >&2
+    if $DRY_RUN; then
+        log_ok "Dry run completed. No changes were made."
+    else
+        log_ok "Installation complete."
+        echo ""
+        echo "  You may need to open a new terminal or run:" >&2
+        echo "    source ~/.bash_profile" >&2
+        echo "  (or equivalent for your shell) for PATH changes to take effect." >&2
+        echo "" >&2
+        echo "  Run 'infinity' to get started." >&2
+    fi
+
+    exit 0
+}
+
+main "$@"

@@ -1,0 +1,36 @@
+{
+  "name": "@infinity/cli",
+  "version": "0.1.0",
+  "description": "Autonomous coding CLI front-end",
+  "type": "module",
+  "bin": {
+    "infinity": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "lint": "biome check src",
+    "format": "biome format --write src"
+  },
+  "keywords": [
+    "cli",
+    "ai",
+    "coding"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0",
+    "dotenv": "^16.5.0",
+    "ora": "^8.2.0",
+    "zod": "^3.25.72"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@types/node": "^26.1.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.6"
+  }
+}

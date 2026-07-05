@@ -2,6 +2,7 @@
 
 import importlib.resources as pkg_resources
 import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -11,11 +12,25 @@ import aiosqlite
 logger = logging.getLogger(__name__)
 
 
+def _default_database_url() -> str:
+    """Return the default SQLite URL in the user's Infinity data directory.
+
+    The path respects the ``INFINITY_MEMORY_PATH`` environment variable so the
+    Python runtime shares the same local data root as the TypeScript CLI.
+    """
+    memory_path = os.environ.get("INFINITY_MEMORY_PATH")
+    if memory_path:
+        db_path = Path(memory_path) / "memory.db"
+    else:
+        db_path = Path.home() / ".infinity" / "memory.db"
+    return f"sqlite+aiosqlite:///{db_path.as_posix()}"
+
+
 class Database:
     """Manages an async SQLite connection and schema migrations."""
 
     def __init__(self, database_url: Optional[str] = None) -> None:
-        self.database_url = database_url or "sqlite+aiosqlite:///infinity.db"
+        self.database_url = database_url or _default_database_url()
         self.connection: Optional[aiosqlite.Connection] = None
 
     def _path_from_url(self) -> Path:

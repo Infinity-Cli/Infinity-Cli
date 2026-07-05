@@ -243,6 +243,23 @@ The CI job performs, in order:
 3. **Run ruff** — `ruff check .` for linting and style.
 4. **Run mypy** — `mypy inf` for static type checking.
 
+### 12.3 TypeScript CLI CI (`.github/workflows/ci-ts.yml`)
+
+A separate workflow validates the `cli-ts/` TypeScript front-end:
+
+```yaml
+# Triggers on every push and pull request.
+# Matrix: ubuntu-latest, windows-latest.
+# Steps: checkout → pnpm 9 → Node 20 → pnpm install → pnpm build → pnpm lint → pnpm test.
+```
+
+The TypeScript CI job performs, in order:
+
+1. **Install dependencies** — `pnpm install --frozen-lockfile` inside `cli-ts/`.
+2. **Build** — `pnpm build` runs `tsc`.
+3. **Lint** — `pnpm lint` runs Biome over `src/`.
+4. **Run tests** — `pnpm test` runs Vitest on both Ubuntu and Windows.
+
 ### 12.3 Full-pipeline sync test
 
 `tests/test_full_pipeline.py` exercises the real CLI-to-API sync path without
@@ -355,7 +372,102 @@ infinity run "<goal>" \
 Local development pairing against a locally running Infinity-api works the same
 way with `--sync-base-url http://localhost:8000`.
 
-## 14. Known Limitations
+## 14. TypeScript CLI Front-End (`cli-ts/`)
+
+`cli-ts/` is a TypeScript CLI front-end that orchestrates local autonomous
+coding tasks. It keeps all user data local and delegates actual agent execution
+to the existing Python Infinity-Cli runtime.
+
+### 14.1 Hybrid TS/Python Architecture
+
+```text
+┌─────────────┐    ┌──────────────────┐    ┌─────────────────────┐
+│   User      │───▶│  TS CLI          │───▶│  Python Runtime     │
+│  `infinity  │    │  commander +     │    │  FastAPI server     │
+│  run goal`  │    │  Streaming UI    │    │  + Orchestrator     │
+└─────────────┘    └──────────────────┘    └─────────────────────┘
+        │                    │                        │
+        ▼                    ▼                        ▼
+   ~/.infinity/        Planner/Scheduler          Model Router
+   memory/             + Bridge client            + Agent swarm
+```
+
+1. **Parse** — `src/index.ts` builds a Commander program with `ask`, `run`,
+   `history`, `search`, `summarize`, `config`, and `bridge` subcommands.
+2. **Plan** — `Planner.plan(goal)` decomposes the goal into a DAG of tasks.
+3. **Schedule** — `Scheduler` runs tasks with configurable concurrency.
+4. **Delegate** — `createBridgeExecutor` forwards each task to the Python
+   `/run` endpoint via `fetch` (no extra HTTP dependency).
+5. **Observe** — `StreamingUI` renders live status, logs, progress, and final
+   summaries in `pretty`, `markdown`, or `json` formats.
+6. **Persist** — `MemoryManager` stores sessions, messages, tasks, and logs in
+   JSON/JSON-lines files under `~/.infinity/memory` (no SQLite dependency on
+   the TS side).
+
+### 14.2 Local-First Storage
+
+- **Config** — `~/.infinity/config.json` (overridable via
+  `INFINITY_CONFIG_PATH`).
+- **Memory** — `~/.infinity/memory/` with `sessions.jsonl`, `messages.jsonl`,
+  `tasks.jsonl`, and `logs.jsonl`.
+- **Repository index** — `~/.infinity/index/` stores chunked documents and
+  embedding vectors computed by the local Ollama `nomic-embed-text` model.
+- **Python shared DB** — The Python FastAPI server persists run events to the
+  same SQLite path (`~/.infinity/memory.db`, overridable via
+  `INFINITY_MEMORY_PATH`).
+
+### 14.3 Provider Abstraction
+
+`src/providers/` implements a registry + factory pattern supporting:
+
+- Ollama (`ollama`)
+- OpenAI (`openai`)
+- Anthropic (`anthropic`)
+- Google Gemini (`gemini`)
+- OpenRouter (`openrouter`)
+- Groq (`groq`)
+- Local/custom models via the registry
+
+Each provider implements `chat(messages)` and `embed(input)`.
+
+### 14.4 Tools, MCP, and Plugins
+
+- **Built-in tools** — `src/tools/` exposes typed `Tool` implementations for
+  File, Git, Shell, Testing, and Browser operations with workspace sandboxing.
+- **Tool bridge** — Python agents can request tool execution via the TS bridge
+  (`/tools/execute`) so that security policy and workspace validation live on
+  the TS side.
+- **MCP client** — `src/mcp/` implements a lightweight stdio-based MCP client
+  with helpers to launch filesystem, browser, and GitHub MCP servers.
+- **Plugin loader** — `src/plugins/` dynamically imports `.js/.mjs/.cjs`
+  plugin files (and directory `index.js`) to extend tools and providers at
+  runtime.
+
+### 14.5 Deployment
+
+To build and run the TypeScript CLI locally:
+
+```bash
+cd cli-ts
+pnpm install
+pnpm build
+node dist/index.js --help
+```
+
+The CLI communicates with the Python bridge server started by the Python
+runtime (default `http://127.0.0.1:8000`). For a fully local run:
+
+```bash
+# Terminal 1 — start the Python runtime server
+python -m inf.server.app
+
+# Terminal 2 — run a goal
+node dist/index.js run "add a login route" --yes
+```
+
+For CI, see `.github/workflows/ci-ts.yml`.
+
+## 15. Known Limitations
 
 - **Ollama dependency / local-only inference default** — Real agent inference
   currently targets a local Ollama server. If Ollama is not reachable the

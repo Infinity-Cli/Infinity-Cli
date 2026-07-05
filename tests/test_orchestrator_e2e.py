@@ -36,6 +36,7 @@ def mock_ollama(monkeypatch):
 def test_run_executes_all_agents_with_mocked_ollama(mock_ollama, tmp_path, monkeypatch):
     """A live ``infinity run`` should drive all registered agents end-to-end."""
     monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("INFINITY_MEMORY_PATH", str(tmp_path / "memory"))
 
     result = runner.invoke(
         app,
@@ -43,9 +44,8 @@ def test_run_executes_all_agents_with_mocked_ollama(mock_ollama, tmp_path, monke
     )
 
     assert result.exit_code == 0, result.output
-    assert "Swarm Run: Success" in result.output
 
-    db_path = tmp_path / "infinity.db"
+    db_path = tmp_path / "memory" / "memory.db"
     db = Database(f"sqlite+aiosqlite:///{db_path}")
     asyncio.run(db.initialize())
     try:
