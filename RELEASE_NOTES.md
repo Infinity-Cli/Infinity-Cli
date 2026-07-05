@@ -39,6 +39,7 @@ After installation, run `infinity` to auto-start the daemon and enter interactiv
 See the full commit log:
 
 ```
+3834e86 fix(pnpm): add packages list to cli-ts workspace config
 5630b3e fix(ci): use job-level defaults.run.shell for matrix shell selection
 bcb982e Add 'update' CLI command and release notes
 9bc8231 release: v0.1.0 premium onboarding redesign + cli-ts
