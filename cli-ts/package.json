@@ -1,6 +1,6 @@
 {
   "name": "@infinity/cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Autonomous coding CLI front-end",
   "type": "module",
   "bin": {
