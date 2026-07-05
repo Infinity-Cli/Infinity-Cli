@@ -39,6 +39,7 @@ After installation, run `infinity` to auto-start the daemon and enter interactiv
 See the full commit log:
 
 ```
+5b73cbe fix(install): support one-line remote install by downloading release source
 ab2562e test(memory): avoid flaky updatedAt timestamp collision
 2c4848d fix(ci): normalize line endings, executable install.sh, detached daemon spawn, remove flaky daemon-lifecycle job
 e3f7b1a docs(release): include pnpm workspace fix in v0.1.0 changelog
