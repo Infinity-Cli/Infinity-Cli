@@ -14,6 +14,7 @@ This release introduces the **TypeScript CLI (`cli-ts`)** — a modern, type-saf
 - **Multi-agent roundtable**: `infinity discuss` — orchestrate multi-agent discussions with configurable rounds.
 - **NVIDIA API key auto-detection**: Automatic detection of NVIDIA endpoints and default model selection.
 - **Markdown-first CLI output**: Hidden agent chatter, `--format`/`--output`/`--verbose` flags for polished terminal output.
+- **Self-update**: `infinity update` checks GitHub releases and re-runs the platform installer.
 - **CI/CD**: GitHub Actions workflow for TypeScript (`ci-ts.yml`), linting with Biome, and test runners.
 - **Config management**: `infinity config --reset`, `.env` auto-loading, provider detection.
 
@@ -22,13 +23,13 @@ This release introduces the **TypeScript CLI (`cli-ts`)** — a modern, type-saf
 ### Windows (PowerShell 5+)
 
 ```powershell
-irm https://raw.githubusercontent.com/fluxion/infinity-cli/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/Infinity-Cli/Infinity-Cli/v0.1.0/install.ps1 | iex
 ```
 
 ### macOS / Linux
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fluxion/infinity-cli/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Infinity-Cli/Infinity-Cli/v0.1.0/install.sh | sh
 ```
 
 After installation, run `infinity` to auto-start the daemon and enter interactive mode.
@@ -38,6 +39,8 @@ After installation, run `infinity` to auto-start the daemon and enter interactiv
 See the full commit log:
 
 ```
+5630b3e fix(ci): use job-level defaults.run.shell for matrix shell selection
+bcb982e Add 'update' CLI command and release notes
 9bc8231 release: v0.1.0 premium onboarding redesign + cli-ts
 53f699d feat: markdown-first CLI output, hidden agent chatter, --format/--output/--verbose
 c3b08f7 feat: add infinity discuss multi-agent roundtable command; fix .env loading
@@ -49,7 +52,7 @@ f3d5742 feat: add NVIDIA API key auto-detection and pytest config
 fa0cbf5 Initial commit
 ```
 
-Or visit: https://github.com/fluxion/infinity-cli/commits/v0.1.0
+Or visit: https://github.com/Infinity-Cli/Infinity-Cli/commits/v0.1.0
 
 ## License
 
