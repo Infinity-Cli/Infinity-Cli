@@ -139,7 +139,34 @@ function Install-Uv {
     $installerPath = Join-Path $env:TEMP "uv-installer.ps1"
     Invoke-WebRequest -Uri $Script:UvInstallerUrl -OutFile $installerPath -UseBasicParsing
     & "$installerPath" -NoModifyPath
-    if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "uv installer failed with exit code $LASTEXITCODE" }
+    $exitCode = $LASTEXITCODE
+
+    # The uv installer may report success on stdout/stderr but still exit 1
+    # (e.g., PATH modification skipped). Accept a non-zero exit code as long
+    # as uv.exe ended up in one of the expected locations.
+    $uvCandidates = @(
+        (Get-Command uv -ErrorAction SilentlyContinue).Source
+        (Join-Path $env:USERPROFILE ".local\bin\uv.exe")
+        (Join-Path $env:LOCALAPPDATA "Programs\uv\uv.exe")
+        (Join-Path $Script:InstallRoot "uv.exe")
+    )
+    $uvFound = $false
+    foreach ($candidate in $uvCandidates) {
+        if ($candidate -and (Test-Path $candidate)) {
+            $uvFound = $true
+            # Make sure the current session can find uv for the rest of the install.
+            $candidateDir = Split-Path -Parent $candidate
+            if (-not ($env:Path -split ";" | Where-Object { $_ -eq $candidateDir })) {
+                $env:Path = "$candidateDir;$env:Path"
+            }
+            break
+        }
+    }
+
+    if ($exitCode -and $exitCode -ne 0 -and -not $uvFound) {
+        throw "uv installer failed with exit code $exitCode"
+    }
+
     Remove-Item $installerPath -Force -ErrorAction SilentlyContinue
     Show-Progress "uv installed"
 }
