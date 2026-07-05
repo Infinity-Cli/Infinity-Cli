@@ -56,11 +56,22 @@ function Test-IsWindows {
 }
 
 function Get-Architecture {
-    $arch = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
+    # Windows PowerShell 5.1 runs on .NET Framework, where RuntimeInformation
+    # is not guaranteed to be loaded. Prefer the PROCESSOR_ARCHITECTURE env var.
+    if ($PSVersionTable.PSVersion.Major -ge 6) {
+        $arch = [System.Runtime.InteropServices.RuntimeInformation]::ProcessArchitecture
+        switch ($arch) {
+            ([System.Runtime.InteropServices.Architecture]::X64) { return "x86_64" }
+            ([System.Runtime.InteropServices.Architecture]::Arm64) { return "arm64" }
+            default { return $arch.ToString().ToLower() }
+        }
+    }
+
+    $arch = [Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITECTURE")
     switch ($arch) {
-        ([System.Runtime.InteropServices.Architecture]::X64) { return "x86_64" }
-        ([System.Runtime.InteropServices.Architecture]::Arm64) { return "arm64" }
-        default { return $arch.ToString().ToLower() }
+        "AMD64" { return "x86_64" }
+        "ARM64" { return "arm64" }
+        default { return $arch.ToLower() }
     }
 }
 
