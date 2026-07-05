@@ -107,9 +107,12 @@ describe("MemoryManager", () => {
 			expect(found?.goal).toBe("Test Goal");
 		});
 
-		it("updates task status and goal", () => {
+		it("updates task status and goal", async () => {
 			const session = manager.createSession("Session");
 			const task = manager.createTask(session.id, "Original Goal");
+
+			// Ensure the update timestamp differs from the creation timestamp
+			await new Promise((resolve) => setTimeout(resolve, 10));
 
 			const updated = manager.updateTask(task.id, { status: "running", goal: "Updated Goal" });
 			expect(updated).toBeDefined();
