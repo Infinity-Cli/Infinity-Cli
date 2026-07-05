@@ -39,6 +39,7 @@ After installation, run `infinity` to auto-start the daemon and enter interactiv
 See the full commit log:
 
 ```
+e3c2725 fix(install): guard LASTEXITCODE checks when running via iex
 4b4723b fix(install): make Get-Architecture work on Windows PowerShell 5.1
 5b73cbe fix(install): support one-line remote install by downloading release source
 ab2562e test(memory): avoid flaky updatedAt timestamp collision
