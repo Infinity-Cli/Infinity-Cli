@@ -62,11 +62,15 @@ jobs:
             script: powershell -NoProfile -File ./install.ps1 -DryRun
 
     runs-on: ${{ matrix.os }}
+
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Run installer dry-run ( ${{ matrix.os }} )
-        shell: ${{ matrix.shell }}
         run: ${{ matrix.script }}
 
   # ---------------------------------------------------------------------------
