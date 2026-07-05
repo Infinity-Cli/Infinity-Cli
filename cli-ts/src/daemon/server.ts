@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { type Server, createServer } from "node:http";
+import { fileURLToPath } from "node:url";
 import { getDataDir, getLogDir, getPidFile, getPortFile } from "./paths.js";
 import { findFreePort, reservePort } from "./port.js";
 
@@ -108,5 +109,18 @@ export function stopDaemonServer(): void {
 		}
 	} catch {
 		// ignore
+	}
+}
+
+// When this module is executed directly (node dist/daemon/server.js),
+// start the daemon server and keep the process alive.
+if (import.meta.url.startsWith("file:")) {
+	const mainPath = process.argv[1] ? fileURLToPath(import.meta.url) : "";
+	if (process.argv[1] === mainPath) {
+		startDaemonServer().catch((err: unknown) => {
+			const message = err instanceof Error ? err.message : String(err);
+			console.error("Failed to start daemon server:", message);
+			process.exit(1);
+		});
 	}
 }

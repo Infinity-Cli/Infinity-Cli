@@ -54,9 +54,9 @@ daemonCommand
 
 		const child = spawn(process.execPath, [daemonScript], {
 			cwd: process.cwd(),
-			stdio: ["ignore", "pipe", "pipe"],
+			stdio: "ignore",
 			env: { ...process.env },
-			detached: false,
+			detached: true,
 		});
 
 		child.on("error", (err) => {
@@ -64,29 +64,26 @@ daemonCommand
 			process.exit(1);
 		});
 
-		// Wait a bit for the server to start
-		await new Promise<void>((resolve) => {
-			child.stdout.once("data", () => {
-				resolve();
-			});
-			// Timeout after 5s
-			setTimeout(() => resolve(), 5000);
-			child.on("exit", (code) => {
-				if (code !== 0) {
-					console.error(chalk.red("Daemon process exited with code %d"), code);
-				}
-				resolve();
-			});
-		});
+		// Allow the parent CLI to exit without killing the daemon
+		child.unref();
 
+		// Wait briefly for the server to write its PID/port files
 		const pid = child.pid;
 		if (pid === null || pid === undefined) {
 			console.error(chalk.red("Failed to start daemon: no PID"));
 			process.exit(1);
 		}
 
-		// Write PID
-		writeFileSync(getPidFile(), String(pid), "utf-8");
+		// The daemon server writes its own PID file; poll until it appears
+		const pidFile = getPidFile();
+		const portFile = getPortFile();
+		const deadline = Date.now() + 5000;
+		while (Date.now() < deadline) {
+			if (existsSync(pidFile) && existsSync(portFile)) {
+				break;
+			}
+			await new Promise((resolve) => setTimeout(resolve, 100));
+		}
 
 		// Read the port file to confirm
 		const port = await readReservedPort();
