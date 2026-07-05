@@ -22,8 +22,8 @@ $ErrorActionPreference = "Stop"
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-$Script:ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-$Script:ProjectRoot = (Resolve-Path $Script:ProjectRoot).Path
+$Script:ReleaseVersion = "v0.1.0"
+$Script:SourceArchiveUrl = "https://github.com/Infinity-Cli/Infinity-Cli/archive/refs/tags/$Script:ReleaseVersion.zip"
 $Script:InstallRoot = if ($env:INFINITY_CLI_HOME) { $env:INFINITY_CLI_HOME } else { Join-Path $env:LOCALAPPDATA "infinity-cli" }
 $Script:BinDir = Join-Path $Script:InstallRoot "bin"
 $Script:UvInstallerUrl = "https://github.com/astral-sh/uv/releases/latest/download/uv-installer.ps1"
@@ -226,6 +226,47 @@ function Test-NodeJs {
         Show-Progress "Node.js v$versionString is available"
     }
 }
+
+# ---------------------------------------------------------------------------
+# Project root resolution (supports local execution and irm ... | iex)
+# ---------------------------------------------------------------------------
+function Initialize-ProjectRoot {
+	$scriptPath = $MyInvocation.MyCommand.Path
+	if ($scriptPath -and (Test-Path $scriptPath)) {
+		$localRoot = Split-Path -Parent $scriptPath
+		if (Test-Path (Join-Path $localRoot "pyproject.toml")) {
+			return (Resolve-Path $localRoot).Path
+		}
+	}
+
+	$downloadDir = Join-Path $env:TEMP "infinity-cli-$Script:ReleaseVersion"
+	$archivePath = "$downloadDir.zip"
+	$extractedDir = Join-Path $downloadDir "Infinity-Cli-$($Script:ReleaseVersion.Substring(1))"
+
+	if (Test-Path $extractedDir) {
+		return (Resolve-Path $extractedDir).Path
+	}
+
+	Show-Progress "Downloading Infinity-CLI $Script:ReleaseVersion source archive"
+	if ($DryRun) {
+		Invoke-DryRunNote "Would download source archive from: $Script:SourceArchiveUrl"
+		Invoke-DryRunNote "Would extract to: $downloadDir"
+		return $downloadDir
+	}
+
+	if (-not (Test-Path $downloadDir)) {
+		New-Item -ItemType Directory -Path $downloadDir -Force | Out-Null
+	}
+	Invoke-WebRequest -Uri $Script:SourceArchiveUrl -OutFile $archivePath -UseBasicParsing
+	Expand-Archive -Path $archivePath -DestinationPath $downloadDir -Force
+	Remove-Item $archivePath -Force -ErrorAction SilentlyContinue
+	if (-not (Test-Path $extractedDir)) {
+		throw "Source archive did not extract to expected directory: $extractedDir"
+	}
+	return (Resolve-Path $extractedDir).Path
+}
+
+$Script:ProjectRoot = Initialize-ProjectRoot
 
 # ---------------------------------------------------------------------------
 # Main

@@ -42,8 +42,48 @@ done
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$SCRIPT_DIR"
+RELEASE_VERSION="v0.1.0"
+SOURCE_ARCHIVE_URL="https://github.com/Infinity-Cli/Infinity-Cli/archive/refs/tags/${RELEASE_VERSION}.tar.gz"
+
+resolve_project_root() {
+	local script_path="${BASH_SOURCE[0]:-}"
+	if [[ -n "$script_path" && -f "$script_path" && -r "$script_path" ]]; then
+		local local_root
+		local_root="$(cd "$(dirname "$script_path")" && pwd)"
+		if [[ -f "$local_root/pyproject.toml" ]]; then
+			echo "$local_root"
+			return
+		fi
+	fi
+
+	local download_dir="${TMPDIR:-/tmp}/infinity-cli-$RELEASE_VERSION"
+	local archive_path="$download_dir.tar.gz"
+
+	if [[ -d "$download_dir" && -f "$download_dir/pyproject.toml" ]]; then
+		echo "$download_dir"
+		return
+	fi
+
+	echo "Downloading Infinity-CLI $RELEASE_VERSION source archive" >&2
+	if [[ "$DRY_RUN" == true ]]; then
+		echo "    [DRY-RUN] Would download source archive from: $SOURCE_ARCHIVE_URL" >&2
+		echo "    [DRY-RUN] Would extract to: $download_dir" >&2
+		echo "$download_dir"
+		return
+	fi
+
+	mkdir -p "$download_dir"
+	curl -fsSL "$SOURCE_ARCHIVE_URL" -o "$archive_path"
+	tar -xzf "$archive_path" -C "$download_dir" --strip-components=1
+	rm -f "$archive_path"
+	if [[ ! -f "$download_dir/pyproject.toml" ]]; then
+		echo "ERROR: Source archive did not extract to expected directory: $download_dir" >&2
+		exit 1
+	fi
+	echo "$download_dir"
+}
+
+PROJECT_ROOT="$(resolve_project_root)"
 
 # ---------------------------------------------------------------------------
 # OS detection
