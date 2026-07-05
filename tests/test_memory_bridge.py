@@ -1,8 +1,7 @@
 """Tests that the Python server persists run events to the shared SQLite DB."""
 
 import asyncio
-import os
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient

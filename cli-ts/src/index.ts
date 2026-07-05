@@ -14,6 +14,7 @@ import { onboardCommand } from "./commands/onboard.js";
 import { runCommand } from "./commands/run.js";
 import { searchCommand } from "./commands/search.js";
 import { summarizeCommand } from "./commands/summarize.js";
+import { updateCommand } from "./commands/update.js";
 import { getDataDir } from "./daemon/paths.js";
 import { isProcessRunning, readPid, writePid } from "./daemon/pids.js";
 import { readReservedPort } from "./daemon/port.js";
@@ -37,7 +38,8 @@ program
 	.addCommand(searchCommand)
 	.addCommand(daemonCommand)
 	.addCommand(summarizeCommand)
-	.addCommand(onboardCommand);
+	.addCommand(onboardCommand)
+	.addCommand(updateCommand);
 
 program.action(async () => {
 	try {

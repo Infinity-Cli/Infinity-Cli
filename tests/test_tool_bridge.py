@@ -1,7 +1,6 @@
 """Tests for the /tools/execute bridge endpoint."""
 
 import json
-import os
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 

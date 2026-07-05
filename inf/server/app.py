@@ -1,6 +1,5 @@
 """FastAPI application for Infinity CLI server."""
 
-import asyncio
 import logging
 import os
 import uuid
