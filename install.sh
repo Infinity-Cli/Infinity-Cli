@@ -266,15 +266,16 @@ build_typescript_cli() {
     fi
 
     local cli_dir="$PROJECT_ROOT/cli-ts"
-    if [[ ! -d "$cli_dir" ]]; then
-        log_error "TypeScript CLI source not found at $cli_dir"
-        exit 1
-    fi
 
     if $DRY_RUN; then
         dry_run_note "Would run: npm install in $cli_dir"
         dry_run_note "Would run: npm run build in $cli_dir"
         return 0
+    fi
+
+    if [[ ! -d "$cli_dir" ]]; then
+        log_error "TypeScript CLI source not found at $cli_dir"
+        exit 1
     fi
 
     log_info "Installing Node dependencies for TypeScript CLI"

@@ -283,14 +283,15 @@ function Build-TypeScriptCli {
     }
 
     $cliDir = Join-Path $Script:ProjectRoot "cli-ts"
-    if (-not (Test-Path $cliDir)) {
-        throw "TypeScript CLI source not found at $cliDir"
-    }
 
     if ($DryRun) {
         Invoke-DryRunNote "Would run: npm install in $cliDir"
         Invoke-DryRunNote "Would run: npm run build in $cliDir"
         return
+    }
+
+    if (-not (Test-Path $cliDir)) {
+        throw "TypeScript CLI source not found at $cliDir"
     }
 
     Show-Progress "Installing Node dependencies for TypeScript CLI"
