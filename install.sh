@@ -42,7 +42,7 @@ done
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-RELEASE_VERSION="v0.1.15"
+RELEASE_VERSION="v0.1.16"
 SOURCE_ARCHIVE_URL="https://github.com/Infinity-Cli/Infinity-Cli/archive/refs/tags/${RELEASE_VERSION}.tar.gz"
 
 resolve_project_root() {
