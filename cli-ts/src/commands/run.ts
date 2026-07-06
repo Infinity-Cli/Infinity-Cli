@@ -13,7 +13,7 @@ import { StreamingUI } from "../ui/streaming.js";
 
 export const runCommand = new Command("run")
 	.description("Run an autonomous coding task")
-	.argument("[goal]", "the coding task goal")
+	.argument("[goal...]", "the coding task goal")
 	.option("--repo <path>", "repository path (default: current directory)", ".")
 	.option("--plan", "print plan and exit without executing")
 	.option("--yes", "auto-confirm execution without prompting")
@@ -21,7 +21,9 @@ export const runCommand = new Command("run")
 	.option("--dry-run", "plan, schedule, and simulate execution without calling runtime")
 	.option("--session <id>", 'session ID (default: "default")', "default")
 	.option("--output <format>", "output format (pretty, markdown, json)", "pretty")
-	.action(async (goal: string | undefined, options) => {
+	.allowExcessArguments(false)
+	.action(async (goalParts: string[], options) => {
+		const goal = goalParts.length > 0 ? goalParts.join(" ") : undefined;
 		const outputFormat = ["pretty", "markdown", "json"].includes(options.output)
 			? (options.output as "pretty" | "markdown" | "json")
 			: "pretty";

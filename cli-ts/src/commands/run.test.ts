@@ -114,6 +114,22 @@ describe("run command", () => {
 		}
 	});
 
+	it("joins multi-word goals passed as separate arguments", async () => {
+		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		try {
+			await runCommand.parseAsync(["add", "a", "login", "route", "--plan"], { from: "user" });
+			const output = consoleSpy.mock.calls.map((c) => c.join(" ")).join("\n");
+			expect(output).toContain("Execution Plan");
+			expect(output).toContain("Goal: add a login route");
+			expect(output).toContain("Tasks: 5");
+		} finally {
+			consoleSpy.mockRestore();
+			consoleErrorSpy.mockRestore();
+		}
+	});
+
 	it('--dry-run prints "Would execute" lines and a summary, exits 0', async () => {
 		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});

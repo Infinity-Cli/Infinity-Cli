@@ -1,4 +1,5 @@
 import { stdin as input, stdout as output } from "node:process";
+import readline from "node:readline";
 import { createInterface } from "node:readline/promises";
 import chalk from "chalk";
 import { Command } from "commander";
@@ -7,10 +8,50 @@ import type { Config } from "../config.js";
 import { PROVIDER_DEFAULT_MODELS, classifyProvider } from "../providers/key-classifier.js";
 import type { ProviderId } from "../providers/key-classifier.js";
 
+const INTERACTIVE_PROVIDERS: ProviderId[] = [
+	"openai",
+	"anthropic",
+	"gemini",
+	"groq",
+	"openrouter",
+	"ollama",
+];
+
+/**
+ * Prompt the user to select a provider from a numbered list.
+ * Returns the selected provider id.
+ */
+export async function promptForProvider(): Promise<ProviderId> {
+	if (!input.isTTY) {
+		console.error(
+			chalk.red(
+				"Error: not running in an interactive terminal. " +
+					"Please run this command in a terminal where you can select a provider.",
+			),
+		);
+		process.exit(1);
+	}
+
+	const lines = INTERACTIVE_PROVIDERS.map((p, i) => `  ${i + 1}. ${p}`).join("\n");
+
+	const rl = createInterface({ input, output });
+	const answer = await rl.question(chalk.cyan(`Select provider:\n${lines}\n> `));
+	rl.close();
+
+	const choice = answer.trim();
+	const index = Number.parseInt(choice, 10) - 1;
+
+	if (Number.isNaN(index) || index < 0 || index >= INTERACTIVE_PROVIDERS.length) {
+		console.error(chalk.red(`Invalid provider selection: "${choice}"`));
+		process.exit(1);
+	}
+
+	return INTERACTIVE_PROVIDERS[index];
+}
+
 /**
  * Prompt the user to paste an API key, returning the trimmed input.
- * If the process is not connected to a TTY (interactive terminal),
- * this prints an error message and exits with code 1.
+ * Echo is replaced with '*' characters on TTYs.
  */
 export async function promptForKey(): Promise<string> {
 	if (!input.isTTY) {
@@ -23,14 +64,16 @@ export async function promptForKey(): Promise<string> {
 		process.exit(1);
 	}
 
+	const promptText = chalk.cyan("Paste your API key: ");
 	const rl = createInterface({ input, output });
-	const key = await rl.question(
-		chalk.cyan(
-			"\nWelcome to Infinity CLI onboarding!\n" +
-				"Paste your API key (it will not be displayed):\n> ",
-		),
-	);
+	const key = await rl.question(promptText);
 	rl.close();
+
+	if (key.length > 0) {
+		readline.moveCursor(output, 0, -1);
+		readline.clearLine(output, 0);
+		output.write(`${promptText}${"*".repeat(key.length)}\n`);
+	}
 
 	return key.trim();
 }
@@ -117,27 +160,58 @@ export async function applyOnboardingConfig(
 
 export const onboardCommand = new Command("onboard")
 	.description("Onboard by pasting an API key; auto-detect provider, validate, and save config")
-	.action(async () => {
+	.argument("[apiKey]", "optional API key to skip interactive prompt")
+	.action(async (apiKey?: string) => {
 		console.log(chalk.bold("\n=== Infinity CLI Onboarding ===\n"));
 
-		const key = await promptForKey();
+		let provider: ProviderId;
+		let key: string;
 
-		const result = classifyProvider(key);
-		if (result === null) {
-			console.error(chalk.red("Could not auto-detect provider from key."));
-			process.exit(1);
+		if (apiKey) {
+			key = apiKey;
+			const result = classifyProvider(key);
+			if (result === null) {
+				console.error(chalk.red("Could not auto-detect provider from key."));
+				process.exit(1);
+			}
+			provider = result.provider;
+		} else {
+			if (!input.isTTY) {
+				console.error(
+					chalk.red(
+						"Error: not running in an interactive terminal. " +
+							"Please provide an API key as an argument or run this command in a terminal.",
+					),
+				);
+				process.exit(1);
+			}
+
+			provider = await promptForProvider();
+
+			if (provider === "ollama") {
+				key = "";
+			} else {
+				key = await promptForKey();
+				if (key === "") {
+					console.error(chalk.red("Error: API key is required."));
+					process.exit(1);
+				}
+			}
 		}
 
-		const provider: ProviderId = result.provider;
 		const model = PROVIDER_DEFAULT_MODELS[provider];
 
-		console.log(chalk.green(`\nDetected provider: ${provider} (default model: ${model})`));
+		console.log(chalk.green(`\nSelected provider: ${provider} (default model: ${model})`));
 
-		const valid = await validateApiKey(provider, key);
-		if (valid) {
-			console.log(chalk.green("✓ API key validated successfully."));
-		} else {
-			console.log(chalk.yellow("⚠ API key validation could not be completed (continuing anyway)."));
+		if (provider !== "ollama") {
+			const valid = await validateApiKey(provider, key);
+			if (valid) {
+				console.log(chalk.green("✓ API key validated successfully."));
+			} else {
+				console.log(
+					chalk.yellow("⚠ API key validation could not be completed (continuing anyway)."),
+				);
+			}
 		}
 
 		const configPath = await applyOnboardingConfig(provider, model, key);

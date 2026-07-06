@@ -1,3 +1,6 @@
+import { stdin, stdout } from "node:process";
+import readline from "node:readline";
+import { createInterface } from "node:readline/promises";
 import chalk from "chalk";
 import { Command } from "commander";
 import { getDefaultConfigPath, readConfig, writeConfig } from "../config.js";
@@ -22,8 +25,30 @@ const getCommand = new Command("get")
 const setCommand = new Command("set")
 	.description("set a config value (e.g., provider, model, apiKey.openai)")
 	.argument("<key>", "config key to set (e.g., provider, model, apiKey.openai)")
-	.argument("<value>", "value to set")
-	.action((key: string, value: string) => {
+	.argument("[value...]", "value to set")
+	.action(async (key: string, valueParts: string[]) => {
+		let value = valueParts.join(" ");
+		const isSensitiveKey = /apiKey|token|secret|password/i.test(key);
+
+		if (value === "" && process.stdin.isTTY) {
+			const rl = createInterface({ input: stdin, output: stdout });
+			const promptText = chalk.cyan(`Enter ${key}: `);
+			value = await rl.question(promptText);
+
+			if (isSensitiveKey && value.length > 0) {
+				readline.moveCursor(stdout, 0, -1);
+				readline.clearLine(stdout, 0);
+				stdout.write(`${promptText}${"*".repeat(value.length)}\n`);
+			}
+
+			rl.close();
+		}
+
+		if (value === "") {
+			console.error(chalk.red("Error: value is required"));
+			process.exit(1);
+		}
+
 		const config = readConfig();
 		setNestedValue(config, key, value);
 		writeConfig(config);

@@ -36,7 +36,7 @@ function highlightMatch(text: string, query: string): string {
 
 export const searchCommand = new Command("search")
 	.description("Search the repository index")
-	.argument("<query>", "search query")
+	.argument("<query...>", "search query")
 	.option("--repo <path>", "repository path (default: current directory)", ".")
 	.option(
 		"--index-dir <dir>",
@@ -58,7 +58,9 @@ export const searchCommand = new Command("search")
 		`embedding model for semantic search (default: ${DEFAULT_EMBEDDING_MODEL})`,
 		DEFAULT_EMBEDDING_MODEL,
 	)
-	.action(async (query: string, options) => {
+	.allowExcessArguments(false)
+	.action(async (queryParts: string[], options) => {
+		const query = queryParts.join(" ");
 		const spinner = ora("Loading index...").start();
 
 		try {

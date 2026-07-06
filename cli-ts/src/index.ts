@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import packageJson from "../package.json" with { type: "json" };
 import { askCommand } from "./commands/ask.js";
 import { bridgeCommand } from "./commands/bridge.js";
+import { chatCommand } from "./commands/chat.js";
 import { configCommand } from "./commands/config.js";
 import { daemonCommand } from "./commands/daemon.js";
 import { historyCommand } from "./commands/history.js";
@@ -26,6 +27,7 @@ program
 	.option("-c, --config <path>", "path to a custom config file")
 	.addCommand(askCommand)
 	.addCommand(bridgeCommand)
+	.addCommand(chatCommand)
 	.addCommand(configCommand)
 	.addCommand(historyCommand)
 	.addCommand(indexCommand)

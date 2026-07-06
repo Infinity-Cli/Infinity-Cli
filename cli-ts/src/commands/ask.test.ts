@@ -159,3 +159,44 @@ describe("ask command - API key validation", () => {
 		exitSpy.mockRestore();
 	});
 });
+
+describe("ask command - variadic prompt", () => {
+	let testConfigDir: string;
+	let originalEnv: NodeJS.ProcessEnv;
+
+	beforeEach(() => {
+		testConfigDir = mkdtempSync(join(tmpdir(), "inf-test-"));
+		originalEnv = { ...process.env };
+		process.env.INFINITY_CONFIG_PATH = join(testConfigDir, "config.json");
+	});
+
+	afterEach(() => {
+		process.env = originalEnv;
+		rmSync(testConfigDir, { recursive: true, force: true });
+	});
+
+	it.each([
+		{ args: ["hello"], expected: "hello" },
+		{ args: ["hello", "world"], expected: "hello world" },
+		{ args: ["how", "do", "I", "foo"], expected: "how do I foo" },
+		{ args: ["hello world"], expected: "hello world" },
+	])("joins prompt parts into '$expected'", async ({ args, expected }) => {
+		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+		writeConfig(
+			{
+				provider: "openai",
+				model: "gpt-4o",
+				apiKeys: {},
+				providers: [],
+				defaultProvider: "openai",
+				serverUrl: "http://127.0.0.1:8000",
+			},
+			process.env.INFINITY_CONFIG_PATH as string,
+		);
+
+		await askCommand.parseAsync([...args, "--dry-run"], { from: "user" });
+
+		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining(`Prompt: ${expected}`));
+		consoleSpy.mockRestore();
+	});
+});

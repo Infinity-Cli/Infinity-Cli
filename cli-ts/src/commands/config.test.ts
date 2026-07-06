@@ -1,9 +1,31 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { stdout } from "node:process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readConfig, writeConfig } from "../config.js";
 import { configCommand } from "./config.js";
+
+const { questionMock, closeMock, moveCursorMock, clearLineMock } = vi.hoisted(() => ({
+	questionMock: vi.fn(),
+	closeMock: vi.fn(),
+	moveCursorMock: vi.fn(),
+	clearLineMock: vi.fn(),
+}));
+
+vi.mock("node:readline/promises", () => ({
+	createInterface: vi.fn(() => ({
+		question: questionMock,
+		close: closeMock,
+	})),
+}));
+
+vi.mock("node:readline", () => ({
+	default: {
+		moveCursor: moveCursorMock,
+		clearLine: clearLineMock,
+	},
+}));
 
 describe("config command", () => {
 	let testConfigDir: string;
@@ -18,6 +40,8 @@ describe("config command", () => {
 	afterEach(() => {
 		process.env = originalEnv;
 		rmSync(testConfigDir, { recursive: true, force: true });
+		vi.clearAllMocks();
+		Object.defineProperty(process.stdin, "isTTY", { value: undefined, configurable: true });
 	});
 
 	it('exports a config command named "config"', () => {
@@ -191,7 +215,116 @@ describe("config command", () => {
 			expect(consoleSpy).toHaveBeenCalledWith(
 				expect.stringContaining("Set apiKey.openai = my-secret-key"),
 			);
+			expect(questionMock).not.toHaveBeenCalled();
 			consoleSpy.mockRestore();
+		});
+
+		it("joins multiple value arguments with spaces", async () => {
+			const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+			writeConfig(
+				{
+					provider: "openai",
+					model: "gpt-4o",
+					apiKeys: {},
+					providers: [],
+					defaultProvider: "openai",
+					serverUrl: "http://127.0.0.1:8000",
+				},
+				process.env.INFINITY_CONFIG_PATH as string,
+			);
+
+			await configCommand.parseAsync(["set", "model", "claude", "3", "opus"], { from: "user" });
+
+			const config = readConfig(process.env.INFINITY_CONFIG_PATH as string);
+			expect(config.model).toBe("claude 3 opus");
+			expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Set model = claude 3 opus"));
+			consoleSpy.mockRestore();
+		});
+
+		it("prompts for value in TTY when value is missing", async () => {
+			const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+			Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
+			questionMock.mockResolvedValueOnce("anthropic");
+			writeConfig(
+				{
+					provider: "openai",
+					model: "gpt-4o",
+					apiKeys: {},
+					providers: [],
+					defaultProvider: "openai",
+					serverUrl: "http://127.0.0.1:8000",
+				},
+				process.env.INFINITY_CONFIG_PATH as string,
+			);
+
+			await configCommand.parseAsync(["set", "provider"], { from: "user" });
+
+			const config = readConfig(process.env.INFINITY_CONFIG_PATH as string);
+			expect(config.provider).toBe("anthropic");
+			expect(questionMock).toHaveBeenCalledTimes(1);
+			expect(questionMock).toHaveBeenCalledWith(expect.stringContaining("Enter provider:"));
+			expect(closeMock).toHaveBeenCalledTimes(1);
+			consoleSpy.mockRestore();
+		});
+
+		it("masks echoed input for sensitive keys in TTY", async () => {
+			const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+			const stdoutSpy = vi.spyOn(stdout, "write").mockImplementation(() => true);
+			Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
+			questionMock.mockResolvedValueOnce("sk-secret");
+			writeConfig(
+				{
+					provider: "openai",
+					model: "gpt-4o",
+					apiKeys: {},
+					providers: [],
+					defaultProvider: "openai",
+					serverUrl: "http://127.0.0.1:8000",
+				},
+				process.env.INFINITY_CONFIG_PATH as string,
+			);
+
+			await configCommand.parseAsync(["set", "apiKey.openai"], { from: "user" });
+
+			const config = readConfig(process.env.INFINITY_CONFIG_PATH as string);
+			expect(config.apiKeys.openai).toBe("sk-secret");
+			expect(moveCursorMock).toHaveBeenCalled();
+			expect(clearLineMock).toHaveBeenCalled();
+			expect(stdoutSpy).toHaveBeenCalledWith(expect.stringContaining("*********"));
+			expect(stdoutSpy).not.toHaveBeenCalledWith(expect.stringContaining("sk-secret"));
+			consoleSpy.mockRestore();
+			stdoutSpy.mockRestore();
+		});
+
+		it("errors and exits when value is missing in non-TTY", async () => {
+			const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+			const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+				throw new Error("process.exit");
+			});
+			Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
+			writeConfig(
+				{
+					provider: "openai",
+					model: "gpt-4o",
+					apiKeys: {},
+					providers: [],
+					defaultProvider: "openai",
+					serverUrl: "http://127.0.0.1:8000",
+				},
+				process.env.INFINITY_CONFIG_PATH as string,
+			);
+
+			await expect(configCommand.parseAsync(["set", "provider"], { from: "user" })).rejects.toThrow(
+				"process.exit",
+			);
+
+			expect(consoleErrorSpy).toHaveBeenCalledWith(
+				expect.stringContaining("Error: value is required"),
+			);
+			expect(exitSpy).toHaveBeenCalledWith(1);
+			expect(questionMock).not.toHaveBeenCalled();
+			consoleErrorSpy.mockRestore();
+			exitSpy.mockRestore();
 		});
 
 		it("sets defaultProvider", async () => {

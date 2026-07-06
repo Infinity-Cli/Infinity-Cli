@@ -197,6 +197,28 @@ export function authorize(user: string, resource: string): boolean {
 		exitSpy.mockRestore();
 	});
 
+	it("joins multi-word queries passed as separate arguments", async () => {
+		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+
+		await searchCommand.parseAsync(
+			["Greeter", "class", "--repo", repoDir, "--index-dir", indexBaseDir],
+			{ from: "user" },
+		);
+
+		expect(consoleErrorSpy).not.toHaveBeenCalled();
+		expect(exitSpy).not.toHaveBeenCalled();
+		expect(consoleSpy).toHaveBeenCalledWith(
+			expect.stringContaining('Search Results for "Greeter class"'),
+		);
+		expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("main.ts"));
+
+		consoleSpy.mockRestore();
+		consoleErrorSpy.mockRestore();
+		exitSpy.mockRestore();
+	});
+
 	it('performs lexical search for "add" and finds utils.ts', async () => {
 		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
