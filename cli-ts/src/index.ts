@@ -2,6 +2,7 @@
 import chalk from "chalk";
 import { Command } from "commander";
 import dotenv from "dotenv";
+import packageJson from "../package.json" with { type: "json" };
 import { askCommand } from "./commands/ask.js";
 import { bridgeCommand } from "./commands/bridge.js";
 import { configCommand } from "./commands/config.js";
@@ -21,7 +22,7 @@ const program = new Command();
 program
 	.name("infinity")
 	.description("Autonomous coding CLI")
-	.version("0.1.0")
+	.version(packageJson.version, "-v, --version")
 	.option("-c, --config <path>", "path to a custom config file")
 	.addCommand(askCommand)
 	.addCommand(bridgeCommand)
