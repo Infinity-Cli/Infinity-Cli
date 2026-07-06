@@ -268,8 +268,9 @@ build_typescript_cli() {
     local cli_dir="$PROJECT_ROOT/cli-ts"
 
     if $DRY_RUN; then
+        dry_run_note "Would install Node dependencies (including TUI dependencies: ink, react, @inkjs/ui) in $cli_dir"
         dry_run_note "Would run: npm install in $cli_dir"
-        dry_run_note "Would run: npm run build in $cli_dir"
+        dry_run_note "Would run: npm run build in $cli_dir to build the TUI entry point"
         return 0
     fi
 
@@ -311,7 +312,7 @@ install_wrappers() {
     if $DRY_RUN; then
         dry_run_note "Would create wrapper script at: $BIN_DIR/infinity"
         dry_run_note "  node: $node_path"
-        dry_run_note "  dist: $dist_path"
+        dry_run_note "  dist: $dist_path (includes the infinity tui entry point)"
         return 0
     fi
 

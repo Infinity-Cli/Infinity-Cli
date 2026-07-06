@@ -15,6 +15,7 @@ import { runCommand } from "./commands/run.js";
 import { searchCommand } from "./commands/search.js";
 import { summarizeCommand } from "./commands/summarize.js";
 import { updateCommand } from "./commands/update.js";
+import { tuiCommand } from "./tui/index.js";
 
 dotenv.config();
 
@@ -36,7 +37,8 @@ program
 	.addCommand(daemonCommand)
 	.addCommand(summarizeCommand)
 	.addCommand(onboardCommand)
-	.addCommand(updateCommand);
+	.addCommand(updateCommand)
+	.addCommand(tuiCommand());
 
 program.action(() => {
 	const width = 62;

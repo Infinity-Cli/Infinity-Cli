@@ -285,8 +285,9 @@ function Build-TypeScriptCli {
     $cliDir = Join-Path $Script:ProjectRoot "cli-ts"
 
     if ($DryRun) {
+        Invoke-DryRunNote "Would install Node dependencies (including TUI dependencies: ink, react, @inkjs/ui) in $cliDir"
         Invoke-DryRunNote "Would run: npm install in $cliDir"
-        Invoke-DryRunNote "Would run: npm run build in $cliDir"
+        Invoke-DryRunNote "Would run: npm run build in $cliDir to build the TUI entry point"
         return
     }
 
@@ -324,7 +325,7 @@ function Install-Wrappers {
     if ($DryRun) {
         Invoke-DryRunNote "Would create wrapper scripts in $Script:BinDir pointing to:"
         Invoke-DryRunNote "  node: $nodePath"
-        Invoke-DryRunNote "  dist: $distPath"
+        Invoke-DryRunNote "  dist: $distPath (includes the infinity tui entry point)"
         return
     }
 
