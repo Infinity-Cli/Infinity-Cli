@@ -2,11 +2,18 @@ import fs from "node:fs";
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { PassThrough } from "node:stream";
 import { render } from "ink";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiffPanel, colorizeDiff } from "./diff-panel.js";
 import { execGitDiff } from "./git-diff.js";
+import {
+	createFakeStdin,
+	createFakeStdout,
+	getLastFrame,
+	stripAnsi,
+	waitForFrame,
+	waitForOutput,
+} from "./test-helpers.js";
 
 vi.mock("node:fs/promises", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("node:fs/promises")>();
@@ -16,89 +23,6 @@ vi.mock("node:fs/promises", async (importOriginal) => {
 vi.mock("./git-diff.js", () => ({
 	execGitDiff: vi.fn(),
 }));
-
-function createFakeStdin(): NodeJS.ReadStream & {
-	isTTY: boolean;
-	isRawModeSupported: boolean;
-	setRawMode: (mode: boolean) => unknown;
-	ref: () => void;
-	unref: () => void;
-} {
-	const stdin = Object.assign(new PassThrough(), {
-		isTTY: true,
-		isRawModeSupported: true,
-		setRawMode: () => stdin,
-		pause: () => stdin,
-		resume: () => stdin,
-		ref: () => {},
-		unref: () => {},
-	}) as unknown as NodeJS.ReadStream & {
-		isTTY: boolean;
-		isRawModeSupported: boolean;
-		setRawMode: (mode: boolean) => unknown;
-		ref: () => void;
-		unref: () => void;
-	};
-	return stdin;
-}
-
-function createFakeStdout(): NodeJS.WriteStream & {
-	columns: number;
-	rows: number;
-	isTTY: boolean;
-	output: string[];
-} {
-	const output: string[] = [];
-	const stdout = Object.assign(new PassThrough(), {
-		columns: 120,
-		rows: 40,
-		isTTY: true,
-		output,
-	}) as unknown as NodeJS.WriteStream & {
-		columns: number;
-		rows: number;
-		isTTY: boolean;
-		output: string[];
-	};
-	(stdout as unknown as { write: NodeJS.WriteStream["write"] }).write = ((
-		chunk: string | Uint8Array,
-		encodingOrCb?: BufferEncoding | ((err?: Error | null) => void),
-		cb?: (err?: Error | null) => void,
-	) => {
-		output.push(chunk.toString());
-		const callback = typeof encodingOrCb === "function" ? encodingOrCb : cb;
-		if (typeof callback === "function") {
-			callback();
-		}
-		return true;
-	}) as NodeJS.WriteStream["write"];
-	return stdout;
-}
-
-async function delay(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-const ESC = String.fromCharCode(0x1b);
-const ANSI_SEQUENCE = new RegExp(`${ESC}\\[[0-9;?]*[a-zA-Z]`, "g");
-
-function stripAnsi(input: string): string {
-	return input.replace(ANSI_SEQUENCE, "");
-}
-
-async function waitForOutput(
-	stdout: ReturnType<typeof createFakeStdout>,
-	predicate: (screen: string) => boolean,
-	timeoutMs = 1000,
-): Promise<string> {
-	const start = Date.now();
-	let screen = stdout.output.join("");
-	while (!predicate(screen) && Date.now() - start < timeoutMs) {
-		await delay(20);
-		screen = stdout.output.join("");
-	}
-	return screen;
-}
 
 describe("DiffPanel", () => {
 	let tmpDir: string | undefined;
@@ -120,7 +44,9 @@ describe("DiffPanel", () => {
 		const stdin = createFakeStdin();
 		const instance = render(<DiffPanel diff={diff} height={10} />, { stdout, stdin });
 
-		const screen = stripAnsi(await waitForOutput(stdout, (s) => s.includes("@@ -1,3 +1,3 @@")));
+		const screen = stripAnsi(
+			await waitForOutput(stdout, (s) => stripAnsi(s).includes("@@ -1,3 +1,3 @@")),
+		);
 		instance.unmount();
 
 		expect(screen).toContain("@@ -1,3 +1,3 @@");
@@ -137,7 +63,7 @@ describe("DiffPanel", () => {
 		const stdin = createFakeStdin();
 		const instance = render(<DiffPanel filePath={file} height={10} />, { stdout, stdin });
 
-		const screen = stripAnsi(await waitForOutput(stdout, (s) => s.includes("beta")));
+		const screen = stripAnsi(await waitForOutput(stdout, (s) => stripAnsi(s).includes("beta")));
 		instance.unmount();
 
 		expect(screen).toContain("alpha");
@@ -156,19 +82,17 @@ describe("DiffPanel", () => {
 		const stdin = createFakeStdin();
 		const instance = render(<DiffPanel filePath={file} height={5} />, { stdout, stdin });
 
-		let screen = stripAnsi(await waitForOutput(stdout, (s) => s.includes("line 1")));
+		let screen = await waitForFrame(stdout, (s) => s.includes("line 1"));
 		expect(screen).toContain("line 1");
 		expect(screen).not.toContain("line 10");
 
-		stdout.output.length = 0;
 		stdin.write("\x1b[B");
-		screen = stripAnsi(await waitForOutput(stdout, (s) => stripAnsi(s).includes("line 2")));
+		screen = await waitForFrame(stdout, (s) => s.includes("line 2") && !s.includes("line 1"));
 		expect(screen).toContain("line 2");
 		expect(screen).not.toContain("line 1");
 
-		stdout.output.length = 0;
 		stdin.write("\x1b[A");
-		screen = stripAnsi(await waitForOutput(stdout, (s) => stripAnsi(s).includes("line 1")));
+		screen = await waitForFrame(stdout, (s) => s.includes("line 1") && !s.includes("line 6"));
 		expect(screen).toContain("line 1");
 
 		instance.unmount();
@@ -201,7 +125,7 @@ describe("DiffPanel with mocked node:fs", () => {
 		const stdin = createFakeStdin();
 		const instance = render(<DiffPanel filePath={file} height={10} />, { stdout, stdin });
 
-		const screen = stripAnsi(await waitForOutput(stdout, (s) => s.includes("beta")));
+		const screen = stripAnsi(await waitForOutput(stdout, (s) => stripAnsi(s).includes("beta")));
 		instance.unmount();
 
 		expect(screen).toContain("alpha");
@@ -233,7 +157,9 @@ describe("DiffPanel with mocked git output", () => {
 			stdin,
 		});
 
-		const screen = stripAnsi(await waitForOutput(stdout, (s) => s.includes("@@ -1,3 +1,3 @@")));
+		const screen = stripAnsi(
+			await waitForOutput(stdout, (s) => stripAnsi(s).includes("@@ -1,3 +1,3 @@")),
+		);
 		instance.unmount();
 
 		expect(screen).toContain("Git diff: src/foo.ts");

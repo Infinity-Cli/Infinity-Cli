@@ -1,77 +1,22 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { PassThrough } from "node:stream";
 import { render } from "ink";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { askOnce } from "../ask-engine.js";
 import { MemoryManager } from "../memory/manager.js";
 import { ChatPanel, extractDiffBlocks } from "./chat-panel.js";
 import App from "./shell.js";
+import {
+	createFakeStdin,
+	createFakeStdout,
+	delay,
+	stripAnsi,
+	waitForFrame,
+	waitForOutput,
+} from "./test-helpers.js";
 
 vi.mock("../ask-engine.js", () => ({ askOnce: vi.fn() }));
-
-function createFakeStdin(): NodeJS.ReadStream & {
-	isTTY: boolean;
-	isRawModeSupported: boolean;
-	setRawMode: (mode: boolean) => unknown;
-	ref: () => void;
-	unref: () => void;
-} {
-	const stdin = Object.assign(new PassThrough(), {
-		isTTY: true,
-		isRawModeSupported: true,
-		setRawMode: () => stdin,
-		pause: () => stdin,
-		resume: () => stdin,
-		ref: () => {},
-		unref: () => {},
-	}) as unknown as NodeJS.ReadStream & {
-		isTTY: boolean;
-		isRawModeSupported: boolean;
-		setRawMode: (mode: boolean) => unknown;
-		ref: () => void;
-		unref: () => void;
-	};
-	return stdin;
-}
-
-function createFakeStdout(): NodeJS.WriteStream & {
-	columns: number;
-	rows: number;
-	isTTY: boolean;
-	output: string[];
-} {
-	const output: string[] = [];
-	const stdout = Object.assign(new PassThrough(), {
-		columns: 120,
-		rows: 40,
-		isTTY: true,
-		output,
-	}) as unknown as NodeJS.WriteStream & {
-		columns: number;
-		rows: number;
-		isTTY: boolean;
-		output: string[];
-	};
-	(stdout as unknown as { write: NodeJS.WriteStream["write"] }).write = ((
-		chunk: string | Uint8Array,
-		encodingOrCb?: BufferEncoding | ((err?: Error | null) => void),
-		cb?: (err?: Error | null) => void,
-	) => {
-		output.push(chunk.toString());
-		const callback = typeof encodingOrCb === "function" ? encodingOrCb : cb;
-		if (typeof callback === "function") {
-			callback();
-		}
-		return true;
-	}) as NodeJS.WriteStream["write"];
-	return stdout;
-}
-
-async function delay(ms: number): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 describe("TUI chat panel", () => {
 	it("sends on Enter", async () => {
@@ -87,13 +32,9 @@ describe("TUI chat panel", () => {
 		}
 		stdin.write("\r");
 
-		let screen = stdout.output.join("");
-		let attempts = 0;
-		while (!screen.includes("Hi there") && attempts < 30) {
-			await delay(50);
-			screen = stdout.output.join("");
-			attempts++;
-		}
+		const screen = stripAnsi(
+			await waitForOutput(stdout, (s) => stripAnsi(s).includes("Hi there")),
+		);
 
 		instance.unmount();
 
@@ -117,7 +58,7 @@ describe("TUI chat panel", () => {
 		stdin.write("\x03");
 
 		await expect(exitPromise).resolves.toBeUndefined();
-		expect(stdout.output.join("")).toContain("Infinity TUI");
+		expect(stripAnsi(stdout.output.join(""))).toContain("Infinity TUI");
 
 		if (previousMemoryPath === undefined) {
 			process.env.INFINITY_MEMORY_PATH = undefined;
@@ -147,23 +88,16 @@ describe("TUI chat panel", () => {
 		}
 		stdin.write("\r");
 
-		let screen = stdout.output.join("");
-		let attempts = 0;
-		while (!screen.includes("< Ok") && attempts < 30) {
-			await delay(50);
-			screen = stdout.output.join("");
-			attempts++;
-		}
+		await waitForOutput(stdout, () => mockOnAsk.mock.calls.length === 2);
 
 		// Press Up to recall "second", then Up again to recall "first"
 		stdin.write("\x1b[A");
-		await delay(20);
+		let screen = stripAnsi(await waitForFrame(stdout, (s) => s.includes("> second")));
 		stdin.write("\x1b[A");
-		await delay(20);
+		screen = stripAnsi(await waitForFrame(stdout, (s) => s.includes("> first")));
 		stdin.write("\x1b[B");
-		await delay(20);
+		screen = stripAnsi(await waitForFrame(stdout, (s) => s.includes("> second")));
 
-		screen = stdout.output.join("");
 		instance.unmount();
 
 		expect(mockOnAsk).toHaveBeenCalledTimes(2);
@@ -194,13 +128,9 @@ describe("TUI chat panel", () => {
 			}
 			stdin.write("\r");
 
-			let screen = stdout.output.join("");
-			let attempts = 0;
-			while (!screen.includes("Hello from assistant") && attempts < 30) {
-				await delay(50);
-				screen = stdout.output.join("");
-				attempts++;
-			}
+			const screen = stripAnsi(
+				await waitForOutput(stdout, (s) => stripAnsi(s).includes("Hello from assistant")),
+			);
 
 			instance.unmount();
 
@@ -229,13 +159,9 @@ describe("TUI chat panel", () => {
 			}
 			stdin.write("\r");
 
-			let screen = stdout.output.join("");
-			let attempts = 0;
-			while (!screen.includes("new line") && attempts < 30) {
-				await delay(50);
-				screen = stdout.output.join("");
-				attempts++;
-			}
+			const screen = stripAnsi(
+				await waitForOutput(stdout, (s) => stripAnsi(s).includes("new line")),
+			);
 
 			instance.unmount();
 
@@ -265,13 +191,9 @@ describe("TUI chat panel", () => {
 			}
 			stdin.write("\r");
 
-			let screen = stdout.output.join("");
-			let attempts = 0;
-			while (!screen.includes("API key missing") && attempts < 30) {
-				await delay(50);
-				screen = stdout.output.join("");
-				attempts++;
-			}
+			const screen = stripAnsi(
+				await waitForOutput(stdout, (s) => stripAnsi(s).includes("API key missing")),
+			);
 
 			instance.unmount();
 
@@ -304,18 +226,14 @@ describe("TUI chat panel", () => {
 				stdin,
 			});
 
-			let screen = stdout.output.join("");
-			let attempts = 0;
-			while (
-				!(
-					screen.includes("previous user message") && screen.includes("previous assistant message")
-				) &&
-				attempts < 30
-			) {
-				await delay(50);
-				screen = stdout.output.join("");
-				attempts++;
-			}
+			const screen = stripAnsi(
+				await waitForOutput(
+					stdout,
+					(s) =>
+						stripAnsi(s).includes("previous user message") &&
+						stripAnsi(s).includes("previous assistant message"),
+				),
+			);
 
 			instance.unmount();
 
