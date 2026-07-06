@@ -32,9 +32,7 @@ describe("TUI chat panel", () => {
 		}
 		stdin.write("\r");
 
-		const screen = stripAnsi(
-			await waitForOutput(stdout, (s) => stripAnsi(s).includes("Hi there")),
-		);
+		const screen = stripAnsi(await waitForOutput(stdout, (s) => stripAnsi(s).includes("Hi there")));
 
 		instance.unmount();
 
