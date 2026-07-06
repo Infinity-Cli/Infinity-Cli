@@ -268,15 +268,76 @@ function Install-InfinityCli {
     & $uvExe pip install -e "$Script:ProjectRoot"
     if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Failed to install Infinity-CLI" }
 
-    # Create small wrapper scripts in bin dir.
-    $infinityExe = Join-Path $venvPath "Scripts\infinity.exe"
+    Show-Progress "Infinity-CLI Python backend installed"
+}
+
+# ---------------------------------------------------------------------------
+# TypeScript CLI front-end
+# ---------------------------------------------------------------------------
+function Build-TypeScriptCli {
+    Show-Progress "Building TypeScript CLI front-end"
+
+    $node = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $node) {
+        throw "Node.js is required to build the Infinity CLI front-end but was not found on PATH."
+    }
+
+    $cliDir = Join-Path $Script:ProjectRoot "cli-ts"
+    if (-not (Test-Path $cliDir)) {
+        throw "TypeScript CLI source not found at $cliDir"
+    }
+
+    if ($DryRun) {
+        Invoke-DryRunNote "Would run: npm install in $cliDir"
+        Invoke-DryRunNote "Would run: npm run build in $cliDir"
+        return
+    }
+
+    Show-Progress "Installing Node dependencies for TypeScript CLI"
+    Push-Location $cliDir
+    try {
+        & npm install
+        if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "npm install failed with exit code $LASTEXITCODE" }
+
+        Show-Progress "Building TypeScript CLI"
+        & npm run build
+        if ($null -ne $LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "npm run build failed with exit code $LASTEXITCODE" }
+    } finally {
+        Pop-Location
+    }
+
+    $distPath = Join-Path $cliDir "dist\index.js"
+    if (-not (Test-Path $distPath)) {
+        throw "TypeScript CLI build did not produce $distPath"
+    }
+
+    Show-Progress "TypeScript CLI built"
+}
+
+function Install-Wrappers {
+    Show-Progress "Creating Infinity CLI wrapper scripts"
+
+    $nodePath = (Get-Command node -ErrorAction Stop).Source
+    $distPath = Join-Path $Script:ProjectRoot "cli-ts\dist\index.js"
+
+    if ($DryRun) {
+        Invoke-DryRunNote "Would create wrapper scripts in $Script:BinDir pointing to:"
+        Invoke-DryRunNote "  node: $nodePath"
+        Invoke-DryRunNote "  dist: $distPath"
+        return
+    }
+
+    if (-not (Test-Path $Script:BinDir)) {
+        New-Item -ItemType Directory -Path $Script:BinDir -Force | Out-Null
+    }
+
     $wrapperPs1 = Join-Path $Script:BinDir "infinity.ps1"
     $wrapperCmd = Join-Path $Script:BinDir "infinity.cmd"
 
-    "& `"$infinityExe`" @args" | Set-Content -Path $wrapperPs1 -Encoding UTF8
-    "@echo off`n`"$infinityExe`" %*" | Set-Content -Path $wrapperCmd -Encoding ASCII
+    "& `"$nodePath`" `"$distPath`" @args" | Set-Content -Path $wrapperPs1 -Encoding UTF8
+    "@echo off`n`"$nodePath`" `"$distPath`" %*" | Set-Content -Path $wrapperCmd -Encoding ASCII
 
-    Show-Progress "Infinity-CLI installed"
+    Show-Progress "Wrapper scripts created"
 }
 
 # ---------------------------------------------------------------------------
@@ -362,7 +423,13 @@ function Install-InfinityCliFull {
     Show-Progress -Message "Python installation complete" -Percent 60
 
     Install-InfinityCli
-    Show-Progress -Message "Infinity-CLI package installation complete" -Percent 85
+    Show-Progress -Message "Infinity-CLI package installation complete" -Percent 70
+
+    Build-TypeScriptCli
+    Show-Progress -Message "TypeScript CLI front-end built" -Percent 80
+
+    Install-Wrappers
+    Show-Progress -Message "Infinity CLI wrapper created" -Percent 90
 
     Remove-OldInfinityWrapper
     Update-Path -Directory $Script:BinDir

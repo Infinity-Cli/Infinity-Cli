@@ -227,7 +227,6 @@ install_infinity_cli() {
         dry_run_note "Would create venv at: $VENV_DIR"
         dry_run_note "Would run: $uv_exe venv '$VENV_DIR' --python $PYTHON_VERSION"
         dry_run_note "Would install: $uv_exe pip install -e '$PROJECT_ROOT'"
-        dry_run_note "Would create wrapper script at: $BIN_DIR/infinity"
         return 0
     fi
 
@@ -255,19 +254,76 @@ install_infinity_cli() {
     log_info "Installing Infinity-CLI in editable mode"
     "$uv_exe" pip install -e "$PROJECT_ROOT" --python "$venv_python"
 
-    # Create wrapper script
-    log_info "Creating wrapper script at $BIN_DIR/infinity"
+    log_ok "Infinity-CLI Python backend installed"
+}
+
+build_typescript_cli() {
+    log_info "Building TypeScript CLI front-end"
+
+    if ! command -v node &>/dev/null; then
+        log_error "Node.js is required to build the Infinity CLI front-end but was not found on PATH."
+        exit 1
+    fi
+
+    local cli_dir="$PROJECT_ROOT/cli-ts"
+    if [[ ! -d "$cli_dir" ]]; then
+        log_error "TypeScript CLI source not found at $cli_dir"
+        exit 1
+    fi
+
+    if $DRY_RUN; then
+        dry_run_note "Would run: npm install in $cli_dir"
+        dry_run_note "Would run: npm run build in $cli_dir"
+        return 0
+    fi
+
+    log_info "Installing Node dependencies for TypeScript CLI"
+    (cd "$cli_dir" && npm install)
+    if [[ $? -ne 0 ]]; then
+        log_error "npm install failed in $cli_dir"
+        exit 1
+    fi
+
+    log_info "Building TypeScript CLI"
+    (cd "$cli_dir" && npm run build)
+    if [[ $? -ne 0 ]]; then
+        log_error "npm run build failed in $cli_dir"
+        exit 1
+    fi
+
+    local dist_path="$cli_dir/dist/index.js"
+    if [[ ! -f "$dist_path" ]]; then
+        log_error "TypeScript CLI build did not produce $dist_path"
+        exit 1
+    fi
+
+    log_ok "TypeScript CLI built"
+}
+
+install_wrappers() {
+    log_info "Creating Infinity CLI wrapper script"
+
+    local node_path
+    node_path="$(command -v node)"
+    local dist_path="$PROJECT_ROOT/cli-ts/dist/index.js"
+
+    if $DRY_RUN; then
+        dry_run_note "Would create wrapper script at: $BIN_DIR/infinity"
+        dry_run_note "  node: $node_path"
+        dry_run_note "  dist: $dist_path"
+        return 0
+    fi
+
+    mkdir -p "$BIN_DIR"
     local infinity_path="$BIN_DIR/infinity"
     cat > "$infinity_path" << WRAPPER_EOF
 #!/usr/bin/env bash
 set -euo pipefail
-INSTALL_ROOT="$INSTALL_ROOT"
-VENV_DIR="$INSTALL_ROOT/venv"
-exec "$VENV_DIR/bin/infinity" "$@"
+exec "$node_path" "$dist_path" "$@"
 WRAPPER_EOF
     chmod +x "$infinity_path"
 
-    log_ok "Infinity-CLI installed"
+    log_ok "Infinity CLI wrapper created"
 }
 
 remove_old_infinity_wrapper() {
@@ -376,14 +432,20 @@ main() {
     # Step 2: install managed Python
     install_python
 
-    # Step 3: install Infinity-CLI
+    # Step 3: install Infinity-CLI Python backend
     install_infinity_cli
 
-    # Step 4: remove stale wrappers and update PATH
+    # Step 4: build TypeScript CLI front-end
+    build_typescript_cli
+
+    # Step 5: create wrapper scripts
+    install_wrappers
+
+    # Step 6: remove stale wrappers and update PATH
     remove_old_infinity_wrapper
     update_path
 
-    # Step 5: Node.js check
+    # Step 7: Node.js check
     check_node
 
     echo "" >&2

@@ -45,7 +45,9 @@ dev = [
 ]
 
 [project.scripts]
-infinity = "inf.__main__:main"
+# The Python package still exposes a backend entry point, but the main
+# `infinity` command is the TypeScript CLI built from cli-ts/.
+infinity-backend = "inf.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
