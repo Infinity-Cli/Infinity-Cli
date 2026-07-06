@@ -65,6 +65,14 @@ describe("classifyProvider", () => {
 		expect(result?.confidence).toBeGreaterThanOrEqual(0.8);
 	});
 
+	it("detects NVIDIA key (nvapi- prefix)", () => {
+		const key = `nvapi-${"a".repeat(32)}`;
+		const result = classifyProvider(key);
+		expect(result).not.toBeNull();
+		expect(result?.provider).toBe("nvidia");
+		expect(result?.confidence).toBeGreaterThanOrEqual(0.8);
+	});
+
 	it("returns null for empty string", () => {
 		expect(classifyProvider("")).toBeNull();
 		expect(classifyProvider("   ")).toBeNull();
@@ -83,7 +91,15 @@ describe("classifyProvider", () => {
 
 describe("PROVIDER_DEFAULT_MODELS", () => {
 	it("has a default model for every provider", () => {
-		const providers = ["openai", "anthropic", "gemini", "groq", "openrouter", "ollama"] as const;
+		const providers = [
+			"openai",
+			"anthropic",
+			"gemini",
+			"groq",
+			"openrouter",
+			"ollama",
+			"nvidia",
+		] as const;
 		for (const p of providers) {
 			expect(PROVIDER_DEFAULT_MODELS[p]).toBeTypeOf("string");
 			expect(PROVIDER_DEFAULT_MODELS[p].length).toBeGreaterThan(0);
@@ -124,6 +140,10 @@ describe("classifyApiKey", () => {
 		expect(classifyApiKey(`sk-ant-${"a".repeat(32)}`)).toBe("anthropic");
 	});
 
+	it("detects nvidia key", () => {
+		expect(classifyApiKey(`nvapi-${"a".repeat(32)}`)).toBe("nvidia");
+	});
+
 	it("returns null for empty input", () => {
 		expect(classifyApiKey("")).toBeNull();
 	});
@@ -133,6 +153,7 @@ describe("getDefaultModel", () => {
 	it("returns a model for known providers", () => {
 		expect(getDefaultModel("openai")).toBe("gpt-4o-mini");
 		expect(getDefaultModel("anthropic")).toBe("claude-3-5-sonnet-20240620");
+		expect(getDefaultModel("nvidia")).toBe("meta/llama3-70b-instruct");
 	});
 
 	it("falls back for unknown provider", () => {

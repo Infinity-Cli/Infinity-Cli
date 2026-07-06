@@ -1,4 +1,11 @@
-export type ProviderId = "openai" | "anthropic" | "gemini" | "groq" | "openrouter" | "ollama";
+export type ProviderId =
+	| "openai"
+	| "anthropic"
+	| "gemini"
+	| "groq"
+	| "openrouter"
+	| "ollama"
+	| "nvidia";
 
 export interface ProviderKeySpec {
 	id: ProviderId;
@@ -48,6 +55,13 @@ export const PROVIDER_KEY_SPECS: ProviderKeySpec[] = [
 		defaultModel: "gpt-4o-mini",
 		baseUrl: "https://api.openai.com/v1",
 	},
+	{
+		id: "nvidia",
+		name: "NVIDIA",
+		patterns: [/^nvapi-[a-zA-Z0-9_\-]+$/i],
+		defaultModel: "meta/llama3-70b-instruct",
+		baseUrl: "https://integrate.api.nvidia.com/v1",
+	},
 ];
 
 function findSpecOrThrow(id: ProviderId): ProviderKeySpec {
@@ -64,6 +78,7 @@ export const PROVIDER_KEY_SPEC_BY_ID: Record<ProviderId, ProviderKeySpec> = {
 	gemini: findSpecOrThrow("gemini"),
 	groq: findSpecOrThrow("groq"),
 	openrouter: findSpecOrThrow("openrouter"),
+	nvidia: findSpecOrThrow("nvidia"),
 	ollama: {
 		id: "ollama",
 		name: "Ollama",
@@ -167,4 +182,5 @@ export const PROVIDER_DEFAULT_MODELS: Record<ProviderId, string> = {
 	groq: "mixtral-8x7b-32768",
 	openrouter: "openai/gpt-4o-mini",
 	ollama: "qwen2.5-coder:7b",
+	nvidia: "meta/llama3-70b-instruct",
 };

@@ -2,6 +2,7 @@ import { stdin, stdout } from "node:process";
 import chalk from "chalk";
 import { Command } from "commander";
 import { getDefaultConfigPath, readConfig, writeConfig } from "../config.js";
+import { type ProviderId, getDefaultModel } from "../providers/key-classifier.js";
 
 const SUPPORTED_KEY_PREFIXES = [
 	{ prefix: "sk-", provider: "openai" },
@@ -140,6 +141,22 @@ const setCommand = new Command("set")
 			}
 			value = key;
 			key = `apiKey.${provider}`;
+			const config = readConfig();
+			setNestedValue(config, "provider", provider);
+			const currentModel = getNestedValue(config, "model");
+			if (typeof currentModel !== "string" || currentModel === "gpt-4o-mini") {
+				setNestedValue(config, "model", getDefaultModel(provider as ProviderId));
+			}
+			setNestedValue(config, key, value);
+			writeConfig(config);
+			const displayValue = isSensitiveConfigKey(key) ? "********" : value;
+			console.log(chalk.green(`Set ${key} = ${displayValue}`));
+			console.log(chalk.green(`Set provider = ${provider}`));
+			const updatedModel = getNestedValue(config, "model");
+			if (typeof updatedModel === "string") {
+				console.log(chalk.green(`Set model = ${updatedModel}`));
+			}
+			return;
 		}
 
 		const isSensitiveKey = isSensitiveConfigKey(key);
@@ -167,7 +184,15 @@ const listCommand = new Command("list")
 	.action(() => {
 		const config = readConfig();
 		console.log(chalk.bold("Providers:"));
-		for (const provider of ["openai", "anthropic", "gemini", "ollama", "groq", "openrouter"]) {
+		for (const provider of [
+			"openai",
+			"anthropic",
+			"gemini",
+			"ollama",
+			"groq",
+			"openrouter",
+			"nvidia",
+		]) {
 			const hasKey = !!config.apiKeys[provider];
 			const isDefault = config.defaultProvider === provider;
 			const marker = isDefault ? chalk.green(" (default)") : "";

@@ -2,6 +2,7 @@ import { AnthropicProvider } from "./anthropic.js";
 import type { Provider } from "./base.js";
 import { GeminiProvider } from "./gemini.js";
 import { GroqProvider } from "./groq.js";
+import { NvidiaProvider } from "./nvidia.js";
 import { OllamaProvider } from "./ollama.js";
 import { OpenAIProvider } from "./openai.js";
 import { OpenRouterProvider } from "./openrouter.js";
@@ -16,6 +17,7 @@ export const PROVIDER_REGISTRY: Record<string, ProviderConstructor> = {
 	ollama: OllamaProvider,
 	groq: GroqProvider,
 	openrouter: OpenRouterProvider,
+	nvidia: NvidiaProvider,
 };
 
 export function registerProvider(id: string, cls: ProviderConstructor): void {

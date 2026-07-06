@@ -336,6 +336,36 @@ describe("config command", () => {
 			consoleSpy.mockRestore();
 		});
 
+		it("auto-detects nvidia API key token and configures provider and model", async () => {
+			const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+			writeConfig(
+				{
+					provider: "openai",
+					model: "gpt-4o-mini",
+					apiKeys: {},
+					providers: [],
+					defaultProvider: "openai",
+					serverUrl: "http://127.0.0.1:8000",
+				},
+				process.env.INFINITY_CONFIG_PATH as string,
+			);
+
+			await configCommand.parseAsync(["set", "nvapi-test12345"], { from: "user" });
+
+			const config = readConfig(process.env.INFINITY_CONFIG_PATH as string);
+			expect(config.apiKeys.nvidia).toBe("nvapi-test12345");
+			expect(config.provider).toBe("nvidia");
+			expect(config.model).toBe("meta/llama3-70b-instruct");
+			expect(consoleSpy).toHaveBeenCalledWith(
+				expect.stringContaining("Set apiKey.nvidia = ********"),
+			);
+			expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Set provider = nvidia"));
+			expect(consoleSpy).toHaveBeenCalledWith(
+				expect.stringContaining("Set model = meta/llama3-70b-instruct"),
+			);
+			consoleSpy.mockRestore();
+		});
+
 		it("sets defaultProvider", async () => {
 			const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 			writeConfig(
