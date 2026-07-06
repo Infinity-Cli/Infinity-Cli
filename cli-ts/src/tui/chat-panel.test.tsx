@@ -1,7 +1,6 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { render } from "ink";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { askOnce } from "../ask-engine.js";
 import { MemoryManager } from "../memory/manager.js";
@@ -11,6 +10,7 @@ import {
 	createFakeStdin,
 	createFakeStdout,
 	delay,
+	renderTui,
 	stripAnsi,
 	waitForFrame,
 	waitForOutput,
@@ -23,7 +23,7 @@ describe("TUI chat panel", () => {
 		const mockOnAsk = vi.fn().mockResolvedValue("Hi there");
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(<ChatPanel onAsk={mockOnAsk} />, { stdout, stdin });
+		const instance = renderTui(<ChatPanel onAsk={mockOnAsk} />, { stdout, stdin });
 
 		await delay(30);
 		for (const char of "hello") {
@@ -49,7 +49,7 @@ describe("TUI chat panel", () => {
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
 
-		const instance = render(<App />, { stdout, stdin, exitOnCtrlC: false });
+		const instance = renderTui(<App />, { stdout, stdin, exitOnCtrlC: false });
 		const exitPromise = instance.waitUntilExit();
 		await delay(30);
 
@@ -70,7 +70,7 @@ describe("TUI chat panel", () => {
 		const mockOnAsk = vi.fn().mockResolvedValue("Ok");
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(<ChatPanel onAsk={mockOnAsk} />, { stdout, stdin });
+		const instance = renderTui(<ChatPanel onAsk={mockOnAsk} />, { stdout, stdin });
 
 		await delay(30);
 		for (const char of "first") {
@@ -117,7 +117,7 @@ describe("TUI chat panel", () => {
 
 			const stdout = createFakeStdout();
 			const stdin = createFakeStdin();
-			const instance = render(<ChatPanel />, { stdout, stdin });
+			const instance = renderTui(<ChatPanel />, { stdout, stdin });
 
 			await delay(30);
 			for (const char of "hi") {
@@ -148,7 +148,7 @@ describe("TUI chat panel", () => {
 			const onShowDiff = vi.fn();
 			const stdout = createFakeStdout();
 			const stdin = createFakeStdin();
-			const instance = render(<ChatPanel onShowDiff={onShowDiff} />, { stdout, stdin });
+			const instance = renderTui(<ChatPanel onShowDiff={onShowDiff} />, { stdout, stdin });
 
 			await delay(30);
 			for (const char of "generate diff") {
@@ -180,7 +180,7 @@ describe("TUI chat panel", () => {
 
 			const stdout = createFakeStdout();
 			const stdin = createFakeStdin();
-			const instance = render(<ChatPanel />, { stdout, stdin });
+			const instance = renderTui(<ChatPanel />, { stdout, stdin });
 
 			await delay(30);
 			for (const char of "fail") {
@@ -219,10 +219,13 @@ describe("TUI chat panel", () => {
 
 			const stdout = createFakeStdout();
 			const stdin = createFakeStdin();
-			const instance = render(<ChatPanel sessionId={session.id} memoryManager={memoryManager} />, {
-				stdout,
-				stdin,
-			});
+			const instance = renderTui(
+				<ChatPanel sessionId={session.id} memoryManager={memoryManager} />,
+				{
+					stdout,
+					stdin,
+				},
+			);
 
 			const screen = stripAnsi(
 				await waitForOutput(

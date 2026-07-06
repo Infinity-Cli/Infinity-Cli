@@ -3,9 +3,9 @@ import { readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
-import { render } from "ink";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FileTree, buildFileTree } from "./file-tree.js";
+import { renderTui } from "./test-helpers.js";
 
 vi.mock("node:fs/promises", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("node:fs/promises")>();
@@ -112,7 +112,7 @@ describe("FileTree", () => {
 
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(
+		const instance = renderTui(
 			<FileTree cwd={tmpDir} onSelect={() => {}} initialExpandedIds={[path.join(tmpDir, "src")]} />,
 			{
 				stdout,
@@ -142,7 +142,7 @@ describe("FileTree", () => {
 
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(<FileTree cwd={tmpDir} onSelect={() => {}} />, {
+		const instance = renderTui(<FileTree cwd={tmpDir} onSelect={() => {}} />, {
 			stdout,
 			stdin,
 		});

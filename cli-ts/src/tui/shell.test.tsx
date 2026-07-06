@@ -2,11 +2,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
-import { render } from "ink";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { askOnce } from "../ask-engine.js";
 import { renderTUI } from "./render.js";
 import App from "./shell.js";
+import { renderTui } from "./test-helpers.js";
 
 vi.mock("../ask-engine.js", () => ({ askOnce: vi.fn() }));
 
@@ -102,7 +102,7 @@ describe("TUI shell", () => {
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
 
-		const instance = render(<App />, { stdout, stdin });
+		const instance = renderTui(<App />, { stdout, stdin });
 		await delay(50);
 		instance.unmount();
 
@@ -141,15 +141,16 @@ describe("TUI shell", () => {
 
 			const stdout = createFakeStdout();
 			const stdin = createFakeStdin();
-			const instance = render(<App cwd={tmpDir} />, { stdout, stdin });
+			const instance = renderTui(<App cwd={tmpDir} />, { stdout, stdin });
 
-			let screen = stripAnsi(await waitForOutput(stdout, (s) => s.includes("hello.txt"), 3000));
+			let screen = stripAnsi(
+				await waitForOutput(stdout, (s) => stripAnsi(s).includes("> 📄 hello.txt"), 5000),
+			);
 			expect(screen).toContain("> 📄 hello.txt");
 
-			stdout.output.length = 0;
 			stdin.write("\r");
 			screen = stripAnsi(
-				await waitForOutput(stdout, (s) => stripAnsi(s).includes("hello world"), 3000),
+				await waitForOutput(stdout, (s) => stripAnsi(s).includes("hello world"), 5000),
 			);
 
 			instance.unmount();

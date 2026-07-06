@@ -1,7 +1,12 @@
-import { render } from "ink";
 import { describe, expect, it } from "vitest";
 import { StatusBar } from "./status-bar.js";
-import { createFakeStdin, createFakeStdout, stripAnsi, waitForOutput } from "./test-helpers.js";
+import {
+	createFakeStdin,
+	createFakeStdout,
+	renderTui,
+	stripAnsi,
+	waitForOutput,
+} from "./test-helpers.js";
 
 describe("StatusBar", () => {
 	it("shows values from config", async () => {
@@ -14,7 +19,7 @@ describe("StatusBar", () => {
 
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(<StatusBar {...config} />, { stdout, stdin });
+		const instance = renderTui(<StatusBar {...config} />, { stdout, stdin });
 
 		const screen = stripAnsi(
 			await waitForOutput(stdout, (s) => stripAnsi(s).includes("Provider:")),
@@ -31,7 +36,7 @@ describe("StatusBar", () => {
 	it("shows provider and model", async () => {
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(
+		const instance = renderTui(
 			<StatusBar provider="openai" model="gpt-4o" agent="coder" tool="edit" />,
 			{ stdout, stdin },
 		);

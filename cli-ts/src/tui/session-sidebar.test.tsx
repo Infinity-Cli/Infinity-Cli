@@ -1,11 +1,16 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { render } from "ink";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryManager, type Session } from "../memory/manager.js";
 import { SessionSidebar } from "./session-sidebar.js";
-import { createFakeStdin, createFakeStdout, stripAnsi, waitForOutput } from "./test-helpers.js";
+import {
+	createFakeStdin,
+	createFakeStdout,
+	renderTui,
+	stripAnsi,
+	waitForOutput,
+} from "./test-helpers.js";
 
 describe("SessionSidebar", () => {
 	let tmpDir: string;
@@ -36,7 +41,7 @@ describe("SessionSidebar", () => {
 
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(
+		const instance = renderTui(
 			<SessionSidebar
 				sessionId={secondSession.id}
 				memoryManager={memoryManager}
@@ -73,7 +78,7 @@ describe("SessionSidebar", () => {
 
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(
+		const instance = renderTui(
 			<SessionSidebar
 				sessionId={secondSession.id}
 				memoryManager={memoryManager}
@@ -110,7 +115,7 @@ describe("SessionSidebar", () => {
 
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(
+		const instance = renderTui(
 			<SessionSidebar
 				sessionId={secondSession.id}
 				memoryManager={memoryManager}
@@ -145,7 +150,7 @@ describe("SessionSidebar", () => {
 
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(
+		const instance = renderTui(
 			<SessionSidebar
 				sessionId={undefined}
 				memoryManager={memoryManager}

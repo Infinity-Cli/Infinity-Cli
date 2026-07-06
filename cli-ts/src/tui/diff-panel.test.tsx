@@ -2,7 +2,6 @@ import fs from "node:fs";
 import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { render } from "ink";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DiffPanel, colorizeDiff } from "./diff-panel.js";
 import { execGitDiff } from "./git-diff.js";
@@ -10,6 +9,7 @@ import {
 	createFakeStdin,
 	createFakeStdout,
 	getLastFrame,
+	renderTui,
 	stripAnsi,
 	waitForFrame,
 	waitForOutput,
@@ -42,7 +42,7 @@ describe("DiffPanel", () => {
  line three`;
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(<DiffPanel diff={diff} height={10} />, { stdout, stdin });
+		const instance = renderTui(<DiffPanel diff={diff} height={10} />, { stdout, stdin });
 
 		const screen = stripAnsi(
 			await waitForOutput(stdout, (s) => stripAnsi(s).includes("@@ -1,3 +1,3 @@")),
@@ -61,7 +61,7 @@ describe("DiffPanel", () => {
 
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(<DiffPanel filePath={file} height={10} />, { stdout, stdin });
+		const instance = renderTui(<DiffPanel filePath={file} height={10} />, { stdout, stdin });
 
 		const screen = stripAnsi(await waitForOutput(stdout, (s) => stripAnsi(s).includes("beta")));
 		instance.unmount();
@@ -80,7 +80,7 @@ describe("DiffPanel", () => {
 
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(<DiffPanel filePath={file} height={5} />, { stdout, stdin });
+		const instance = renderTui(<DiffPanel filePath={file} height={5} />, { stdout, stdin });
 
 		let screen = await waitForFrame(stdout, (s) => s.includes("line 1"));
 		expect(screen).toContain("line 1");
@@ -123,7 +123,7 @@ describe("DiffPanel with mocked node:fs", () => {
 
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(<DiffPanel filePath={file} height={10} />, { stdout, stdin });
+		const instance = renderTui(<DiffPanel filePath={file} height={10} />, { stdout, stdin });
 
 		const screen = stripAnsi(await waitForOutput(stdout, (s) => stripAnsi(s).includes("beta")));
 		instance.unmount();
@@ -152,7 +152,7 @@ describe("DiffPanel with mocked git output", () => {
 
 		const stdout = createFakeStdout();
 		const stdin = createFakeStdin();
-		const instance = render(<DiffPanel gitDiffForPath="src/foo.ts" height={10} />, {
+		const instance = renderTui(<DiffPanel gitDiffForPath="src/foo.ts" height={10} />, {
 			stdout,
 			stdin,
 		});

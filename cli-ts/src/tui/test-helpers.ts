@@ -1,7 +1,18 @@
 import { PassThrough } from "node:stream";
+import { type Instance, type RenderOptions, render } from "ink";
+import type { ReactNode } from "react";
 
 const ESC = String.fromCharCode(0x1b);
 const ANSI_SEQUENCE = new RegExp(`${ESC}\\[[0-9;?]*[a-zA-Z]`, "g");
+
+export function renderTui(tree: ReactNode, options: RenderOptions = {}): Instance {
+	return render(tree, {
+		debug: true,
+		exitOnCtrlC: false,
+		patchConsole: false,
+		...options,
+	});
+}
 
 export function stripAnsi(input: string): string {
 	return input.replace(ANSI_SEQUENCE, "");
