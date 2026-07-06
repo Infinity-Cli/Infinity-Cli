@@ -22,7 +22,7 @@ $ErrorActionPreference = "Stop"
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-$Script:ReleaseVersion = "v0.1.14"
+$Script:ReleaseVersion = "v0.1.15"
 $Script:SourceArchiveUrl = "https://github.com/Infinity-Cli/Infinity-Cli/archive/refs/tags/$Script:ReleaseVersion.zip"
 $Script:InstallRoot = if ($env:INFINITY_CLI_HOME) { $env:INFINITY_CLI_HOME } else { Join-Path $env:LOCALAPPDATA "infinity-cli" }
 $Script:BinDir = Join-Path $Script:InstallRoot "bin"
