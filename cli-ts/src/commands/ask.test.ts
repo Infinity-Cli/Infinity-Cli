@@ -8,15 +8,19 @@ import { askCommand } from "./ask.js";
 describe("ask command", () => {
 	let testConfigDir: string;
 	let originalEnv: NodeJS.ProcessEnv;
+	let originalExitCode: typeof process.exitCode;
 
 	beforeEach(() => {
 		testConfigDir = mkdtempSync(join(tmpdir(), "inf-test-"));
 		originalEnv = { ...process.env };
+		originalExitCode = process.exitCode;
+		process.exitCode = 0;
 		process.env.INFINITY_CONFIG_PATH = join(testConfigDir, "config.json");
 	});
 
 	afterEach(() => {
 		process.env = originalEnv;
+		process.exitCode = originalExitCode;
 		rmSync(testConfigDir, { recursive: true, force: true });
 	});
 
@@ -93,21 +97,24 @@ describe("ask command", () => {
 describe("ask command - API key validation", () => {
 	let testConfigDir: string;
 	let originalEnv: NodeJS.ProcessEnv;
+	let originalExitCode: typeof process.exitCode;
 
 	beforeEach(() => {
 		testConfigDir = mkdtempSync(join(tmpdir(), "inf-test-"));
 		originalEnv = { ...process.env };
+		originalExitCode = process.exitCode;
+		process.exitCode = 0;
 		process.env.INFINITY_CONFIG_PATH = join(testConfigDir, "config.json");
 	});
 
 	afterEach(() => {
 		process.env = originalEnv;
+		process.exitCode = originalExitCode;
 		rmSync(testConfigDir, { recursive: true, force: true });
 	});
 
 	it("exits with error when provider needs API key but none configured", async () => {
 		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-		const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
 		writeConfig(
 			{
 				provider: "openai",
@@ -123,14 +130,12 @@ describe("ask command - API key validation", () => {
 		await askCommand.parseAsync(["hello", "--provider", "openai"], { from: "user" });
 
 		expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("API key not set"));
-		expect(exitSpy).toHaveBeenCalledWith(1);
+		expect(process.exitCode).toBe(1);
 		consoleErrorSpy.mockRestore();
-		exitSpy.mockRestore();
 	});
 
 	it("allows ollama without API key", async () => {
 		const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-		const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
 		writeConfig(
 			{
 				provider: "ollama",
@@ -153,25 +158,28 @@ describe("ask command - API key validation", () => {
 		await askCommand.parseAsync(["hello", "--provider", "ollama"], { from: "user" });
 
 		expect(consoleErrorSpy).not.toHaveBeenCalledWith(expect.stringContaining("API key not set"));
-		expect(exitSpy).not.toHaveBeenCalled();
+		expect(process.exitCode).not.toBe(1);
 		fetchSpy.mockRestore();
 		consoleErrorSpy.mockRestore();
-		exitSpy.mockRestore();
 	});
 });
 
 describe("ask command - variadic prompt", () => {
 	let testConfigDir: string;
 	let originalEnv: NodeJS.ProcessEnv;
+	let originalExitCode: typeof process.exitCode;
 
 	beforeEach(() => {
 		testConfigDir = mkdtempSync(join(tmpdir(), "inf-test-"));
 		originalEnv = { ...process.env };
+		originalExitCode = process.exitCode;
+		process.exitCode = 0;
 		process.env.INFINITY_CONFIG_PATH = join(testConfigDir, "config.json");
 	});
 
 	afterEach(() => {
 		process.env = originalEnv;
+		process.exitCode = originalExitCode;
 		rmSync(testConfigDir, { recursive: true, force: true });
 	});
 

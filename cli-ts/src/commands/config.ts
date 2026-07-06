@@ -1,9 +1,101 @@
 import { stdin, stdout } from "node:process";
-import readline from "node:readline";
-import { createInterface } from "node:readline/promises";
 import chalk from "chalk";
 import { Command } from "commander";
 import { getDefaultConfigPath, readConfig, writeConfig } from "../config.js";
+
+const SUPPORTED_KEY_PREFIXES = [
+	{ prefix: "sk-", provider: "openai" },
+	{ prefix: "pk-", provider: "openai" },
+	{ prefix: "nvapi-", provider: "nvidia" },
+	{ prefix: "hf_", provider: "huggingface" },
+	{ prefix: "ghp_", provider: "github" },
+	{ prefix: "xai-", provider: "xai" },
+	{ prefix: "AIza", provider: "gemini" },
+	{ prefix: "ollama_", provider: "ollama" },
+];
+
+function looksLikeApiKey(str: string): boolean {
+	if (/^(sk-|pk-|nvapi-|hf_|ghp_|xai-|AIza|ollama_)(\S+)$/.test(str)) {
+		return true;
+	}
+	if (str.length > 20 && !str.includes(".") && /^[a-zA-Z0-9_-]+$/.test(str)) {
+		return true;
+	}
+	return false;
+}
+
+function mapApiKeyToProvider(key: string): string | undefined {
+	for (const { prefix, provider } of SUPPORTED_KEY_PREFIXES) {
+		if (key.startsWith(prefix)) {
+			return provider;
+		}
+	}
+	return undefined;
+}
+
+function isSensitiveConfigKey(key: string): boolean {
+	return key.startsWith("apiKey.") || /token|secret|password/i.test(key);
+}
+
+export async function promptMasked(promptText: string): Promise<string> {
+	return new Promise((resolve) => {
+		stdout.write(promptText);
+
+		if (!stdin.isTTY || typeof stdin.setRawMode !== "function") {
+			stdin.once("data", (data) => {
+				resolve(data.toString("utf8").replace(/\r?\n$/, ""));
+			});
+			return;
+		}
+
+		const previousRawMode = stdin.isRaw;
+		stdin.setRawMode(true);
+		stdin.resume();
+
+		let value = "";
+
+		const onData = (data: Buffer) => {
+			const str = data.toString("utf8");
+			for (const char of str) {
+				const code = char.charCodeAt(0);
+				if (code === 3) {
+					// Ctrl+C
+					stdout.write("^C\n");
+					stdin.setRawMode(previousRawMode);
+					stdin.pause();
+					stdin.removeListener("data", onData);
+					process.exitCode = 1;
+					resolve("");
+					return;
+				}
+				if (code === 13 || code === 10) {
+					// Enter
+					stdout.write("\n");
+					stdin.setRawMode(previousRawMode);
+					stdin.pause();
+					stdin.removeListener("data", onData);
+					resolve(value);
+					return;
+				}
+				if (code === 127 || code === 8) {
+					// Backspace
+					if (value.length > 0) {
+						value = value.slice(0, -1);
+						stdout.write("\b \b");
+					}
+					continue;
+				}
+				if (code < 32) {
+					continue;
+				}
+				value += char;
+				stdout.write("*");
+			}
+		};
+
+		stdin.on("data", onData);
+	});
+}
 
 const getCommand = new Command("get")
 	.description("print the current config or a specific key")
@@ -14,7 +106,8 @@ const getCommand = new Command("get")
 			const value = getNestedValue(config, key);
 			if (value === undefined) {
 				console.error(chalk.red(`Key not found: ${key}`));
-				process.exit(1);
+				process.exitCode = 1;
+				return;
 			}
 			console.log(JSON.stringify(value, null, 2));
 		} else {
@@ -26,33 +119,47 @@ const setCommand = new Command("set")
 	.description("set a config value (e.g., provider, model, apiKey.openai)")
 	.argument("<key>", "config key to set (e.g., provider, model, apiKey.openai)")
 	.argument("[value...]", "value to set")
-	.action(async (key: string, valueParts: string[]) => {
+	.action(async (rawKey: string, valueParts: string[]) => {
+		let key = rawKey;
 		let value = valueParts.join(" ");
-		const isSensitiveKey = /apiKey|token|secret|password/i.test(key);
+
+		if (value === "" && looksLikeApiKey(key)) {
+			const provider = mapApiKeyToProvider(key);
+			if (provider === undefined) {
+				console.error(
+					chalk.red(
+						[
+							"Error: the value looks like an API key, but its provider prefix is not recognized.",
+							`Supported prefixes: ${SUPPORTED_KEY_PREFIXES.map((p) => p.prefix).join(", ")}`,
+							"Usage: infinity config set apiKey.<provider> <key>",
+						].join("\n"),
+					),
+				);
+				process.exitCode = 1;
+				return;
+			}
+			value = key;
+			key = `apiKey.${provider}`;
+		}
+
+		const isSensitiveKey = isSensitiveConfigKey(key);
 
 		if (value === "" && process.stdin.isTTY) {
-			const rl = createInterface({ input: stdin, output: stdout });
 			const promptText = chalk.cyan(`Enter ${key}: `);
-			value = await rl.question(promptText);
-
-			if (isSensitiveKey && value.length > 0) {
-				readline.moveCursor(stdout, 0, -1);
-				readline.clearLine(stdout, 0);
-				stdout.write(`${promptText}${"*".repeat(value.length)}\n`);
-			}
-
-			rl.close();
+			value = await promptMasked(promptText);
 		}
 
 		if (value === "") {
 			console.error(chalk.red("Error: value is required"));
-			process.exit(1);
+			process.exitCode = 1;
+			return;
 		}
 
 		const config = readConfig();
 		setNestedValue(config, key, value);
 		writeConfig(config);
-		console.log(chalk.green(`Set ${key} = ${value}`));
+		const displayValue = isSensitiveKey ? "********" : value;
+		console.log(chalk.green(`Set ${key} = ${displayValue}`));
 	});
 
 const listCommand = new Command("list")

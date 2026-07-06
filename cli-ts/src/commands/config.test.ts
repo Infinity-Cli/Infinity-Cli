@@ -1,44 +1,26 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { stdout } from "node:process";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { readConfig, writeConfig } from "../config.js";
 import { configCommand } from "./config.js";
 
-const { questionMock, closeMock, moveCursorMock, clearLineMock } = vi.hoisted(() => ({
-	questionMock: vi.fn(),
-	closeMock: vi.fn(),
-	moveCursorMock: vi.fn(),
-	clearLineMock: vi.fn(),
-}));
-
-vi.mock("node:readline/promises", () => ({
-	createInterface: vi.fn(() => ({
-		question: questionMock,
-		close: closeMock,
-	})),
-}));
-
-vi.mock("node:readline", () => ({
-	default: {
-		moveCursor: moveCursorMock,
-		clearLine: clearLineMock,
-	},
-}));
-
 describe("config command", () => {
 	let testConfigDir: string;
 	let originalEnv: NodeJS.ProcessEnv;
+	let originalExitCode: typeof process.exitCode;
 
 	beforeEach(() => {
 		testConfigDir = mkdtempSync(join(tmpdir(), "inf-config-test-"));
 		originalEnv = { ...process.env };
+		originalExitCode = process.exitCode;
+		process.exitCode = 0;
 		process.env.INFINITY_CONFIG_PATH = join(testConfigDir, "config.json");
 	});
 
 	afterEach(() => {
 		process.env = originalEnv;
+		process.exitCode = originalExitCode;
 		rmSync(testConfigDir, { recursive: true, force: true });
 		vi.clearAllMocks();
 		Object.defineProperty(process.stdin, "isTTY", { value: undefined, configurable: true });
@@ -127,7 +109,6 @@ describe("config command", () => {
 
 		it("exits with error for unknown key", async () => {
 			const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-			const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
 			writeConfig(
 				{
 					provider: "openai",
@@ -143,9 +124,8 @@ describe("config command", () => {
 			await configCommand.parseAsync(["get", "unknown.key"], { from: "user" });
 
 			expect(consoleErrorSpy).toHaveBeenCalledWith(expect.stringContaining("Key not found"));
-			expect(exitSpy).toHaveBeenCalledWith(1);
+			expect(process.exitCode).toBe(1);
 			consoleErrorSpy.mockRestore();
-			exitSpy.mockRestore();
 		});
 	});
 
@@ -194,7 +174,7 @@ describe("config command", () => {
 			consoleSpy.mockRestore();
 		});
 
-		it("sets apiKey for provider", async () => {
+		it("sets apiKey for provider and masks output", async () => {
 			const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 			writeConfig(
 				{
@@ -213,9 +193,8 @@ describe("config command", () => {
 			const config = readConfig(process.env.INFINITY_CONFIG_PATH as string);
 			expect(config.apiKeys.openai).toBe("my-secret-key");
 			expect(consoleSpy).toHaveBeenCalledWith(
-				expect.stringContaining("Set apiKey.openai = my-secret-key"),
+				expect.stringContaining("Set apiKey.openai = ********"),
 			);
-			expect(questionMock).not.toHaveBeenCalled();
 			consoleSpy.mockRestore();
 		});
 
@@ -243,8 +222,75 @@ describe("config command", () => {
 
 		it("prompts for value in TTY when value is missing", async () => {
 			const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+			const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
 			Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
-			questionMock.mockResolvedValueOnce("anthropic");
+			(process.stdin as NodeJS.ReadStream & { setRawMode: (mode: boolean) => void }).setRawMode =
+				vi.fn();
+			writeConfig(
+				{
+					provider: "openai",
+					model: "gpt-4o",
+					apiKeys: {},
+					providers: [],
+					defaultProvider: "openai",
+					serverUrl: "http://127.0.0.1:8000",
+				},
+				process.env.INFINITY_CONFIG_PATH as string,
+			);
+
+			const promise = configCommand.parseAsync(["set", "provider"], { from: "user" });
+			setImmediate(() => {
+				process.stdin.emit("data", Buffer.from("anthropic\n"));
+			});
+			await promise;
+
+			const config = readConfig(process.env.INFINITY_CONFIG_PATH as string);
+			expect(config.provider).toBe("anthropic");
+			expect(stdoutSpy).toHaveBeenCalledWith(expect.stringContaining("Enter provider:"));
+			expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("Set provider = anthropic"));
+			consoleSpy.mockRestore();
+			stdoutSpy.mockRestore();
+		});
+
+		it("masks echoed input for sensitive keys in TTY", async () => {
+			const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+			const stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+			Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
+			(process.stdin as NodeJS.ReadStream & { setRawMode: (mode: boolean) => void }).setRawMode =
+				vi.fn();
+			writeConfig(
+				{
+					provider: "openai",
+					model: "gpt-4o",
+					apiKeys: {},
+					providers: [],
+					defaultProvider: "openai",
+					serverUrl: "http://127.0.0.1:8000",
+				},
+				process.env.INFINITY_CONFIG_PATH as string,
+			);
+
+			const promise = configCommand.parseAsync(["set", "apiKey.openai"], { from: "user" });
+			setImmediate(() => {
+				process.stdin.emit("data", Buffer.from("sk-secret\n"));
+			});
+			await promise;
+
+			const config = readConfig(process.env.INFINITY_CONFIG_PATH as string);
+			expect(config.apiKeys.openai).toBe("sk-secret");
+			expect(stdoutSpy).toHaveBeenCalledWith(expect.stringContaining("Enter apiKey.openai:"));
+			expect(stdoutSpy).toHaveBeenCalledWith("*");
+			expect(stdoutSpy).not.toHaveBeenCalledWith(expect.stringContaining("sk-secret"));
+			expect(consoleSpy).toHaveBeenCalledWith(
+				expect.stringContaining("Set apiKey.openai = ********"),
+			);
+			consoleSpy.mockRestore();
+			stdoutSpy.mockRestore();
+		});
+
+		it("errors and sets exit code when value is missing in non-TTY", async () => {
+			const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+			Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
 			writeConfig(
 				{
 					provider: "openai",
@@ -259,72 +305,35 @@ describe("config command", () => {
 
 			await configCommand.parseAsync(["set", "provider"], { from: "user" });
 
-			const config = readConfig(process.env.INFINITY_CONFIG_PATH as string);
-			expect(config.provider).toBe("anthropic");
-			expect(questionMock).toHaveBeenCalledTimes(1);
-			expect(questionMock).toHaveBeenCalledWith(expect.stringContaining("Enter provider:"));
-			expect(closeMock).toHaveBeenCalledTimes(1);
-			consoleSpy.mockRestore();
-		});
-
-		it("masks echoed input for sensitive keys in TTY", async () => {
-			const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-			const stdoutSpy = vi.spyOn(stdout, "write").mockImplementation(() => true);
-			Object.defineProperty(process.stdin, "isTTY", { value: true, configurable: true });
-			questionMock.mockResolvedValueOnce("sk-secret");
-			writeConfig(
-				{
-					provider: "openai",
-					model: "gpt-4o",
-					apiKeys: {},
-					providers: [],
-					defaultProvider: "openai",
-					serverUrl: "http://127.0.0.1:8000",
-				},
-				process.env.INFINITY_CONFIG_PATH as string,
-			);
-
-			await configCommand.parseAsync(["set", "apiKey.openai"], { from: "user" });
-
-			const config = readConfig(process.env.INFINITY_CONFIG_PATH as string);
-			expect(config.apiKeys.openai).toBe("sk-secret");
-			expect(moveCursorMock).toHaveBeenCalled();
-			expect(clearLineMock).toHaveBeenCalled();
-			expect(stdoutSpy).toHaveBeenCalledWith(expect.stringContaining("*********"));
-			expect(stdoutSpy).not.toHaveBeenCalledWith(expect.stringContaining("sk-secret"));
-			consoleSpy.mockRestore();
-			stdoutSpy.mockRestore();
-		});
-
-		it("errors and exits when value is missing in non-TTY", async () => {
-			const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-			const exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
-				throw new Error("process.exit");
-			});
-			Object.defineProperty(process.stdin, "isTTY", { value: false, configurable: true });
-			writeConfig(
-				{
-					provider: "openai",
-					model: "gpt-4o",
-					apiKeys: {},
-					providers: [],
-					defaultProvider: "openai",
-					serverUrl: "http://127.0.0.1:8000",
-				},
-				process.env.INFINITY_CONFIG_PATH as string,
-			);
-
-			await expect(configCommand.parseAsync(["set", "provider"], { from: "user" })).rejects.toThrow(
-				"process.exit",
-			);
-
 			expect(consoleErrorSpy).toHaveBeenCalledWith(
 				expect.stringContaining("Error: value is required"),
 			);
-			expect(exitSpy).toHaveBeenCalledWith(1);
-			expect(questionMock).not.toHaveBeenCalled();
+			expect(process.exitCode).toBe(1);
 			consoleErrorSpy.mockRestore();
-			exitSpy.mockRestore();
+		});
+
+		it("auto-detects provider from API key token and stores masked", async () => {
+			const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+			writeConfig(
+				{
+					provider: "openai",
+					model: "gpt-4o",
+					apiKeys: {},
+					providers: [],
+					defaultProvider: "openai",
+					serverUrl: "http://127.0.0.1:8000",
+				},
+				process.env.INFINITY_CONFIG_PATH as string,
+			);
+
+			await configCommand.parseAsync(["set", "sk-test12345"], { from: "user" });
+
+			const config = readConfig(process.env.INFINITY_CONFIG_PATH as string);
+			expect(config.apiKeys.openai).toBe("sk-test12345");
+			expect(consoleSpy).toHaveBeenCalledWith(
+				expect.stringContaining("Set apiKey.openai = ********"),
+			);
+			consoleSpy.mockRestore();
 		});
 
 		it("sets defaultProvider", async () => {

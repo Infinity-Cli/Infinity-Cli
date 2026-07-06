@@ -46,7 +46,8 @@ export const askCommand = new Command("ask")
 				} else if (error instanceof Error) {
 					console.error(chalk.red(error.message));
 				}
-				process.exit(1);
+				process.exitCode = 1;
+				return;
 			}
 		},
 	);
