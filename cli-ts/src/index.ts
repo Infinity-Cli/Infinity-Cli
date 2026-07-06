@@ -47,11 +47,12 @@ program.action(async () => {
 		await launchInteractive();
 	} catch (err) {
 		console.error(chalk.red("Failed to start daemon: %s"), (err as Error).message);
-		program.help();
+		program.outputHelp();
+		process.exitCode = 1;
 	}
 });
 
-program.parse();
+await program.parseAsync();
 
 /**
  * Ensure the background daemon is running.
