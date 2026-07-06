@@ -78,6 +78,25 @@ function Get-Architecture {
 # ---------------------------------------------------------------------------
 # PATH management
 # ---------------------------------------------------------------------------
+function Remove-OldInfinityWrapper {
+    $oldPaths = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python311\Scripts\infinity.exe")
+        (Join-Path $env:LOCALAPPDATA "Programs\Python\Python312\Scripts\infinity.exe")
+        (Join-Path $env:ProgramFiles "Python311\Scripts\infinity.exe")
+        (Join-Path $env:ProgramFiles "Python312\Scripts\infinity.exe")
+    )
+    foreach ($old in $oldPaths) {
+        if (Test-Path $old) {
+            if ($DryRun) {
+                Invoke-DryRunNote "Would remove old infinity wrapper: $old"
+            } else {
+                Show-Progress "Removing old infinity wrapper: $old"
+                Remove-Item $old -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+}
+
 function Update-Path {
     param(
         [Parameter(Mandatory)]
@@ -88,7 +107,7 @@ function Update-Path {
 
     if ($DryRun) {
         Invoke-DryRunNote "Would query registry HKCU:\Environment for PATH"
-        Invoke-DryRunNote "Would add '$Directory' to user PATH if missing"
+        Invoke-DryRunNote "Would prepend '$Directory' to user PATH if missing"
         return
     }
 
@@ -100,14 +119,20 @@ function Update-Path {
     }
 
     $paths = $currentPath -split ";" | Where-Object { $_ -ne "" }
-    if ($paths -contains $Directory) {
-        Show-Progress "Directory already in user PATH"
+    if ($paths -and $paths[0] -eq $Directory) {
+        Show-Progress "Directory already at front of user PATH"
         return
     }
 
-    $newPath = ($paths + $Directory) -join ";"
+    # Remove existing occurrence and prepend so the new wrapper wins over any
+    # stale global installation (e.g., an old Python Scripts\infinity.exe).
+    $filtered = $paths | Where-Object { $_ -ne $Directory }
+    $newPath = $Directory
+    if ($filtered) {
+        $newPath = "$Directory;" + ($filtered -join ";")
+    }
     Set-ItemProperty -Path $regPath -Name "Path" -Value $newPath
-    Show-Progress "Added $Directory to user PATH"
+    Show-Progress "Prepended $Directory to user PATH"
 
     # Broadcast environment change so new consoles pick it up.
     $HWND_BROADCAST = [IntPtr]0xFFFF
@@ -339,6 +364,7 @@ function Install-InfinityCliFull {
     Install-InfinityCli
     Show-Progress -Message "Infinity-CLI package installation complete" -Percent 85
 
+    Remove-OldInfinityWrapper
     Update-Path -Directory $Script:BinDir
     Test-NodeJs
 

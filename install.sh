@@ -270,6 +270,18 @@ WRAPPER_EOF
     log_ok "Infinity-CLI installed"
 }
 
+remove_old_infinity_wrapper() {
+    local old_path="$HOME/.local/bin/infinity"
+    if [[ -f "$old_path" ]]; then
+        if $DRY_RUN; then
+            dry_run_note "Would remove old infinity wrapper: $old_path"
+        else
+            log_info "Removing old infinity wrapper: $old_path"
+            rm -f "$old_path"
+        fi
+    fi
+}
+
 update_path() {
     log_info "Updating PATH"
 
@@ -287,7 +299,8 @@ update_path() {
         profile_file="$HOME/.profile"
     fi
 
-    local path_line="export PATH=\"\$PATH:$BIN_DIR\""
+    # Prepend the new bin dir so it wins over any stale global installation.
+    local path_line="export PATH=\"$BIN_DIR:\$PATH\""
 
     if $DRY_RUN; then
         dry_run_note "Would add to $profile_file:"
@@ -304,7 +317,7 @@ update_path() {
     echo "" >> "$profile_file"
     echo "# Added by Infinity-CLI installer" >> "$profile_file"
     echo "$path_line" >> "$profile_file"
-    log_ok "Added $BIN_DIR to PATH in $profile_file"
+    log_ok "Prepended $BIN_DIR to PATH in $profile_file"
 }
 
 check_node() {
@@ -366,7 +379,8 @@ main() {
     # Step 3: install Infinity-CLI
     install_infinity_cli
 
-    # Step 4: update PATH
+    # Step 4: remove stale wrappers and update PATH
+    remove_old_infinity_wrapper
     update_path
 
     # Step 5: Node.js check
