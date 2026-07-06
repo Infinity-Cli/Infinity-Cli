@@ -231,6 +231,15 @@ function Install-InfinityCli {
     & $uvExe venv "$venvPath" --python $PythonVersion
     if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Failed to create virtual environment" }
 
+    # uv pip install detects the active environment via VIRTUAL_ENV or by finding
+    # .venv/venv in the current directory. Explicitly activate the new venv so the
+    # subsequent install command targets it.
+    $env:VIRTUAL_ENV = $venvPath
+    $venvScripts = Join-Path $venvPath "Scripts"
+    if (-not ($env:Path -split ";" | Where-Object { $_ -eq $venvScripts })) {
+        $env:Path = "$venvScripts;$env:Path"
+    }
+
     & $uvExe pip install -e "$Script:ProjectRoot"
     if ($LASTEXITCODE -and $LASTEXITCODE -ne 0) { throw "Failed to install Infinity-CLI" }
 
